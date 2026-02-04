@@ -1,0 +1,41 @@
+{
+  "excel_loader": {
+    "smb_share": "data",
+    "file_pattern": "Book1.xlsx",
+    "default_sheet": "Sheet1",
+    "fallback_sheets": [
+      "Transactions",
+      "Report",
+      "Data"
+    ]
+  },
+  "dashboard": {
+    "app_title": "Tally Financial Dashboard",
+    "layout": "wide",
+    "port": 8502,
+    "theme": "light"
+  },
+  "cash_ledgers": [
+    "Cash Account",
+    "HDFC Bank",
+    "Axis Bank",
+    "ICICI Bank",
+    "SBI Account"
+  ],
+  "revenue_keywords": [
+    "sales",
+    "service income",
+    "revenue",
+    "income"
+  ],
+  "expense_keywords": [
+    "expense",
+    "cost",
+    "rent",
+    "salary",
+    "utilities"
+  ],
+  "date_format": "YYYY-MM-DD",
+  "currency": "INR",
+  "currency_symbol": "INR"
+}
