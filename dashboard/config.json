@@ -1,0 +1,37 @@
+{
+  "excel_loader": {
+    "smb_share": "/app/data",
+    "file_pattern": "MIS_Report*.xlsx",
+    "default_sheet": "Transaction Dump",
+    "fallback_sheets": ["Transactions", "Report", "Data", "Sheet1"],
+    "skip_rows": 1
+  },
+  "dashboard": {
+    "app_title": "Tally Financial Dashboard",
+    "layout": "wide",
+    "port": 8502,
+    "theme": "light"
+  },
+  "cash_ledgers": [
+    "Cash Account",
+    "HDFC Bank",
+    "Axis Bank",
+    "ICICI Bank",
+    "SBI Account"
+  ],
+  "revenue_keywords": [
+    "Direct Incomes",
+    "Indirect Incomes",
+    "Direct Income",
+    "Indirect Income"
+  ],
+  "expense_keywords": [
+    "Direct Expenses",
+    "Indirect Expenses",
+    "Direct Expense",
+    "Indirect Expense"
+  ],
+  "date_format": "YYYY-MM-DD",
+  "currency": "INR",
+  "currency_symbol": "INR"
+}
