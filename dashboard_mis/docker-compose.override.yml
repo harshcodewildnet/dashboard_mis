@@ -1,8 +1,0 @@
-version: "3.9"
-services:
-  dashboard:
-    volumes:
-      - ./data:/data:ro
-  api:
-    volumes:
-      - ./data:/data:ro

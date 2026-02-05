@@ -30,6 +30,33 @@ from dashboard.utils.metrics import (
     top_ledgers,
 )
 
+# Auth Imports
+from api.auth import Token, UserData, create_access_token, get_current_user, verify_password, ACCESS_TOKEN_EXPIRE_MINUTES
+from api.db import SessionLocal, User, Department, init_db
+from api.auth import pwd_context
+
+# Create tables and seed if empty
+init_db()
+db = SessionLocal()
+try:
+    if not db.query(User).filter(User.role == "ADMIN").first():
+        admin = User(
+            email="admin@company.com",
+            password_hash=pwd_context.hash("admin123"),
+            role="ADMIN"
+        )
+        db.add(admin)
+        db.commit()
+        print("Default admin created: admin@company.com / admin123")
+except Exception as e:
+    print(f"Seeding error: {e}")
+finally:
+    db.close()
+from fastapi import Depends, status, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+from datetime import timedelta
+from sqlalchemy import func
+
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "dashboard" / "config.json"
 
@@ -83,6 +110,21 @@ def _df_to_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
             row["date"] = _ts_to_iso(row["date"])
         records.append(row)
     return records
+
+
+# --- RBAC Helper ---
+def _apply_rbac(df: pd.DataFrame, user: UserData) -> pd.DataFrame:
+    """Filter DataFrame based on user role and department."""
+    if user.role == "ADMIN":
+        return df
+    
+    if user.cost_centre_parent:
+        # Filter by Cost Centre Parent
+        if "cost_centre_parent" in df.columns:
+             return df[df["cost_centre_parent"] == user.cost_centre_parent]
+    
+    # Return empty if no match
+    return df.iloc[0:0]
 
 
 class MetaPayload(BaseModel):
@@ -221,8 +263,52 @@ app.add_middleware(
 )
 
 
+# --- Auth Endpoints ---
+
+@app.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    db = SessionLocal()
+    try:
+        username = form_data.username.strip().lower()
+        password = form_data.password.strip()
+        
+        print(f"Login attempt for: {username}")
+        user = db.query(User).filter(func.lower(User.email) == username).first()
+        
+        if not user:
+            print(f"User not found: {username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        is_valid = verify_password(password, user.password_hash)
+        print(f"Password valid for {username}: {is_valid}")
+        
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.email}, expires_delta=access_token_expires
+        )
+        return {"access_token": access_token, "token_type": "bearer"}
+    finally:
+        db.close()
+
+
+@app.get("/api/me", response_model=UserData)
+async def read_users_me(current_user: UserData = Depends(get_current_user)):
+    return current_user
+
+
 @app.get("/api/meta", response_model=MetaPayload)
-def meta():
+def meta(current_user: UserData = Depends(get_current_user)):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
@@ -231,14 +317,18 @@ def meta():
 
 
 @app.get("/api/ledgers", response_model=List[str])
-def ledgers():
+def ledgers(current_user: UserData = Depends(get_current_user)):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    if "ledger" not in bundle.df.columns:
+    
+    # Apply RBAC
+    df = _apply_rbac(bundle.df, current_user)
+
+    if "ledger" not in df.columns:
         return []
-    ledgers = sorted(bundle.df["ledger"].dropna().unique())
+    ledgers = sorted(df["ledger"].dropna().unique())
     return [str(l) for l in ledgers]
 
 
@@ -246,13 +336,17 @@ def ledgers():
 def summary(
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
+    current_user: UserData = Depends(get_current_user),
 ):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    df = _filter_by_date(bundle.df, start, end)
+    # Apply RBAC First
+    rbac_df = _apply_rbac(bundle.df, current_user)
+    
+    df = _filter_by_date(rbac_df, start, end)
     revenue_keywords = config.get("revenue_keywords", [])
     expense_keywords = config.get("expense_keywords", [])
     cash_ledgers = config.get("cash_ledgers", [])
@@ -276,13 +370,16 @@ def sales(
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
     top: int = Query(10, ge=3, le=50),
+    current_user: UserData = Depends(get_current_user),
 ):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    df = _filter_by_date(bundle.df, start, end)
+    # Apply RBAC
+    rbac_df = _apply_rbac(bundle.df, current_user)
+    df = _filter_by_date(rbac_df, start, end)
     revenue_keywords = config.get("revenue_keywords", [])
 
     sales_df = df.copy()
@@ -312,13 +409,16 @@ def ledger(
     name: str = Query(..., description="Ledger name"),
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
+    current_user: UserData = Depends(get_current_user),
 ):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    df = bundle.df
+    # Apply RBAC
+    df = _apply_rbac(bundle.df, current_user)
+    
     if "ledger" not in df.columns:
         raise HTTPException(status_code=400, detail="Ledger column missing in data")
 
@@ -358,13 +458,16 @@ def rows(
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
     limit: int = Query(500, ge=1, le=5000),
+    current_user: UserData = Depends(get_current_user),
 ):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    df = _filter_by_date(bundle.df, start, end)
+    # Apply RBAC
+    rbac_df = _apply_rbac(bundle.df, current_user)
+    df = _filter_by_date(rbac_df, start, end)
     trimmed = df.head(limit)
     records = _df_to_records(trimmed)
 
@@ -372,13 +475,15 @@ def rows(
 
 
 @app.get("/api/home", response_model=HomeDataResponse)
-def home():
+def home(current_user: UserData = Depends(get_current_user)):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    df = bundle.df
+    # Apply RBAC
+    df = _apply_rbac(bundle.df, current_user)
+    
     revenue_keywords = config.get("revenue_keywords", [])
     expense_keywords = config.get("expense_keywords", [])
     cash_ledgers = config.get("cash_ledgers", [])
@@ -420,19 +525,24 @@ def home():
 
 
 @app.get("/api/income", response_model=IncomeResponse)
-def income():
+def income(current_user: UserData = Depends(get_current_user)):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    df = bundle.df
+    # Apply RBAC
+    df = _apply_rbac(bundle.df, current_user)
+    
     revenue_keywords = config.get("revenue_keywords", [])
     expense_keywords = config.get("expense_keywords", [])
 
     # Get total income
     total_income, _, _ = get_current_month_profit(df, revenue_keywords, expense_keywords)
-    current_month = df["date"].max().strftime("%B %Y")
+    if df.empty:
+        current_month = "No data"
+    else:
+        current_month = df["date"].max().strftime("%B %Y")
 
     # Get variance details
     income_details = get_income_detail_with_variance(df, revenue_keywords)
@@ -455,19 +565,24 @@ def income():
 
 
 @app.get("/api/expense", response_model=ExpenseResponse)
-def expense():
+def expense(current_user: UserData = Depends(get_current_user)):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    df = bundle.df
+    # Apply RBAC
+    df = _apply_rbac(bundle.df, current_user)
+    
     revenue_keywords = config.get("revenue_keywords", [])
     expense_keywords = config.get("expense_keywords", [])
 
     # Get total expense
     _, total_expense, _ = get_current_month_profit(df, revenue_keywords, expense_keywords)
-    current_month = df["date"].max().strftime("%B %Y")
+    if df.empty:
+        current_month = "No data"
+    else:
+        current_month = df["date"].max().strftime("%B %Y")
 
     # Get variance details
     expense_details = get_expense_detail_with_variance(df, expense_keywords)

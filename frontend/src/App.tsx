@@ -1,14 +1,15 @@
-import { AppShell, Burger, Group, NavLink, ScrollArea, Text } from "@mantine/core";
+import { AppShell, Burger, Group, NavLink, ScrollArea, Text, Button } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { 
-  IconChartArea, 
-  IconCoin, 
-  IconHome, 
-  IconNotebook, 
-  IconReceipt, 
-  IconShoppingBag 
+import {
+  IconChartArea,
+  IconCoin,
+  IconHome,
+  IconNotebook,
+  IconReceipt,
+  IconShoppingBag,
+  IconLogout
 } from "@tabler/icons-react";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { ExpensePage } from "./pages/ExpensePage";
 import { HomePage } from "./pages/HomePage";
@@ -17,6 +18,8 @@ import { LedgerPage } from "./pages/LedgerPage";
 import { RowsPage } from "./pages/RowsPage";
 import { SalesPage } from "./pages/SalesPage";
 import { SummaryPage } from "./pages/SummaryPage";
+import { LoginPage } from "./pages/LoginPage";
+import { auth } from "./auth/auth";
 
 const links = [
   { label: "Home", to: "/", icon: <IconHome size={16} /> },
@@ -29,10 +32,34 @@ const links = [
 
 export default function App() {
   const [opened, { toggle, close }] = useDisclosure();
+  const [authenticated, setAuthenticated] = useState(auth.isAuthenticated());
   const location = useLocation();
   const navigate = useNavigate();
 
   const current = useMemo(() => location.pathname, [location.pathname]);
+
+  useEffect(() => {
+    if (authenticated) {
+      auth.fetchMe().catch(() => {
+        setAuthenticated(false);
+      });
+    }
+  }, [authenticated]);
+
+  const handleLoginSuccess = () => {
+    setAuthenticated(true);
+    navigate("/");
+  };
+
+  const handleLogout = () => {
+    auth.logout();
+    setAuthenticated(false);
+    navigate("/");
+  };
+
+  if (!authenticated) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
 
   return (
     <AppShell
@@ -46,9 +73,20 @@ export default function App() {
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
             <Text fw={700}>MIS Dashboard</Text>
           </Group>
-          <Text size="sm" c="dimmed">
-            React + FastAPI
-          </Text>
+          <Group gap="sm">
+            <Text size="sm" c="dimmed">
+              {auth.getUser()?.email}
+            </Text>
+            <Button
+              variant="subtle"
+              color="gray"
+              size="compact-xs"
+              onClick={handleLogout}
+              leftSection={<IconLogout size={14} />}
+            >
+              Logout
+            </Button>
+          </Group>
         </Group>
       </AppShell.Header>
 
