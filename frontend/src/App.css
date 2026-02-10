@@ -1,0 +1,24 @@
+/* Base chart styling */
+.chart-container .recharts-tooltip-cursor {
+  display: none !important;
+}
+
+/* Tooltip container styling */
+.recharts-tooltip-wrapper {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.recharts-default-tooltip {
+  background-color: white !important;
+  background: white !important;
+  border: 1px solid #dee2e6 !important;
+  border-radius: 4px !important;
+  padding: 12px !important;
+  box-shadow: none !important;
+}
+
+/* Ensure no shadows on any children of the tooltip wrapper */
+.recharts-tooltip-wrapper * {
+  box-shadow: none !important;
+}

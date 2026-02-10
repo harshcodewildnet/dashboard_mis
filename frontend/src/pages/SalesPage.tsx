@@ -8,7 +8,11 @@ import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
 import { StatGrid } from "../components/StatGrid";
 
-export function SalesPage() {
+interface SalesPageProps {
+  departmentKey?: string | null;
+}
+
+export function SalesPage({ departmentKey }: SalesPageProps) {
   const [range, setRange] = useState<[Date | null, Date | null]>([null, null]);
   const [topN, setTopN] = useState<number>(10);
 

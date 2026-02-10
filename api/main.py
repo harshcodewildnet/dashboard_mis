@@ -113,13 +113,39 @@ def _df_to_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
 
 
 # --- RBAC Helper ---
-def _apply_rbac(df: pd.DataFrame, user: UserData) -> pd.DataFrame:
-    """Filter DataFrame based on user role and department."""
+def _apply_rbac(
+    df: pd.DataFrame, 
+    user: UserData,
+    admin_filter_dept_key: Optional[str] = None
+) -> pd.DataFrame:
+    """Filter DataFrame based on user role and department.
+    
+    Args:
+        df: Data to filter
+        user: Current authenticated user
+        admin_filter_dept_key: Optional department filter (ADMIN only)
+    
+    Returns:
+        Filtered dataframe based on RBAC rules
+    """
+    # ADMIN with optional department filter
     if user.role == "ADMIN":
+        if admin_filter_dept_key:
+            # Admin filtering by specific department
+            db = SessionLocal()
+            try:
+                dept = db.query(Department).filter(
+                    Department.department_key == admin_filter_dept_key
+                ).first()
+                if dept and "cost_centre_parent" in df.columns:
+                    return df[df["cost_centre_parent"] == dept.cost_centre_parent]
+            finally:
+                db.close()
+        # Admin without filter sees all data
         return df
     
+    # DEPT_HEAD always filtered by their department (ignore admin_filter_dept_key)
     if user.cost_centre_parent:
-        # Filter by Cost Centre Parent
         if "cost_centre_parent" in df.columns:
              return df[df["cost_centre_parent"] == user.cost_centre_parent]
     
@@ -172,6 +198,13 @@ class LedgerRow(BaseModel):
     voucher_type: Optional[str] = None
 
 
+class DepartmentComparisonItem(BaseModel):
+    label: str
+    current: float
+    previous: float
+    variance: float
+
+
 class LedgerResponse(BaseModel):
     meta: MetaPayload
     ledger: str
@@ -179,6 +212,7 @@ class LedgerResponse(BaseModel):
     period_total: float
     closing: float
     running_balance: List[LedgerRow]
+    department_breakdown: Optional[List[DepartmentComparisonItem]] = None
 
 
 class RowsResponse(BaseModel):
@@ -191,6 +225,7 @@ class VarianceItem(BaseModel):
     ledger: str
     current_amount: float
     previous_amount: float
+    two_months_ago_amount: float
     variance_pct: float
 
 
@@ -225,6 +260,28 @@ class HomeDataResponse(BaseModel):
     net_profit: float
     monthly_expenses: List[MonthlyExpenseItem]
     daily_profit: List[Dict[str, Any]]
+
+
+class MonthlyTrendPoint(BaseModel):
+    month: str
+    month_label: str
+    income: float
+    expense: float
+    profit: float
+
+
+class MonthlyTrendsSummary(BaseModel):
+    avg_income: float
+    avg_expense: float
+    avg_profit: float
+    best_month: Optional[str] = None
+    worst_month: Optional[str] = None
+
+
+class MonthlyTrendsResponse(BaseModel):
+    meta: MetaPayload
+    trends: List[MonthlyTrendPoint]
+    summary: MonthlyTrendsSummary
 
 
 def _meta_from_dict(meta: Dict[str, Any]) -> MetaPayload:
@@ -307,6 +364,36 @@ async def read_users_me(current_user: UserData = Depends(get_current_user)):
     return current_user
 
 
+class DepartmentPayload(BaseModel):
+    department_key: str
+    department_name: str
+    cost_centre_parent: str
+
+
+@app.get("/api/departments", response_model=List[DepartmentPayload])
+def get_departments(current_user: UserData = Depends(get_current_user)):
+    """Get list of all departments. Admin only."""
+    if current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can access departments list"
+        )
+    
+    db = SessionLocal()
+    try:
+        depts = db.query(Department).order_by(Department.department_name).all()
+        return [
+            DepartmentPayload(
+                department_key=d.department_key,
+                department_name=d.department_name,
+                cost_centre_parent=d.cost_centre_parent
+            )
+            for d in depts
+        ]
+    finally:
+        db.close()
+
+
 @app.get("/api/meta", response_model=MetaPayload)
 def meta(current_user: UserData = Depends(get_current_user)):
     try:
@@ -317,14 +404,17 @@ def meta(current_user: UserData = Depends(get_current_user)):
 
 
 @app.get("/api/ledgers", response_model=List[str])
-def ledgers(current_user: UserData = Depends(get_current_user)):
+def ledgers(
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
+    current_user: UserData = Depends(get_current_user)
+):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     
-    # Apply RBAC
-    df = _apply_rbac(bundle.df, current_user)
+    # Apply RBAC with optional admin filter
+    df = _apply_rbac(bundle.df, current_user, department_key)
 
     if "ledger" not in df.columns:
         return []
@@ -336,6 +426,7 @@ def ledgers(current_user: UserData = Depends(get_current_user)):
 def summary(
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
     current_user: UserData = Depends(get_current_user),
 ):
     try:
@@ -343,8 +434,8 @@ def summary(
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # Apply RBAC First
-    rbac_df = _apply_rbac(bundle.df, current_user)
+    # Apply RBAC First with optional admin filter
+    rbac_df = _apply_rbac(bundle.df, current_user, department_key)
     
     df = _filter_by_date(rbac_df, start, end)
     revenue_keywords = config.get("revenue_keywords", [])
@@ -370,6 +461,7 @@ def sales(
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
     top: int = Query(10, ge=3, le=50),
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
     current_user: UserData = Depends(get_current_user),
 ):
     try:
@@ -377,8 +469,8 @@ def sales(
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # Apply RBAC
-    rbac_df = _apply_rbac(bundle.df, current_user)
+    # Apply RBAC with optional admin filter
+    rbac_df = _apply_rbac(bundle.df, current_user, department_key)
     df = _filter_by_date(rbac_df, start, end)
     revenue_keywords = config.get("revenue_keywords", [])
 
@@ -409,6 +501,7 @@ def ledger(
     name: str = Query(..., description="Ledger name"),
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
     current_user: UserData = Depends(get_current_user),
 ):
     try:
@@ -416,8 +509,8 @@ def ledger(
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # Apply RBAC
-    df = _apply_rbac(bundle.df, current_user)
+    # Apply RBAC with optional admin filter
+    df = _apply_rbac(bundle.df, current_user, department_key)
     
     if "ledger" not in df.columns:
         raise HTTPException(status_code=400, detail="Ledger column missing in data")
@@ -443,6 +536,63 @@ def ledger(
                 )
             )
 
+    # Calculate department breakdown if in Global View (no department_key)
+    department_breakdown = None
+    if department_key is None and "cost_centre_parent" in df.columns:
+        # Filter for this ledger only
+        ledger_df = df[df["ledger"] == name]
+        
+                # Determine Current and Previous Month
+        if not ledger_df.empty:
+            max_date = ledger_df["date"].max()
+            current_month_start = max_date.replace(day=1)
+            previous_month_start = (current_month_start - pd.DateOffset(months=1)).replace(day=1)
+            
+            # Filter Data
+            current_df = ledger_df[ledger_df["date"] >= current_month_start]
+            previous_df = ledger_df[
+                (ledger_df["date"] >= previous_month_start) & 
+                (ledger_df["date"] < current_month_start)
+            ]
+            
+            # Group by Department
+            curr_grp = current_df.groupby("cost_centre_parent")["amount"].sum()
+            prev_grp = previous_df.groupby("cost_centre_parent")["amount"].sum()
+            
+            # Merge
+            all_depts = set(curr_grp.index) | set(prev_grp.index)
+            breakdown_list = []
+            
+            for dept in all_depts:
+                # Helper to sanitize floats
+                def safe_float(val):
+                    f_val = float(val)
+                    if f_val == float('inf') or f_val == float('-inf') or f_val != f_val:
+                        return 0.0
+                    return f_val
+
+                curr_val = safe_float(curr_grp.get(dept, 0))
+                prev_val = safe_float(prev_grp.get(dept, 0))
+                
+                variance_pct = 0.0
+                if prev_val != 0:
+                    try:
+                        raw_variance = ((curr_val - prev_val) / abs(prev_val)) * 100
+                        variance_pct = safe_float(raw_variance)
+                    except ZeroDivisionError:
+                        variance_pct = 0.0
+                
+                breakdown_list.append({
+                    "label": str(dept) if dept else "Unknown",
+                    "current": curr_val,
+                    "previous": prev_val,
+                    "variance": variance_pct
+                })
+                
+            # Sort by current amount desc
+            breakdown_list.sort(key=lambda x: x["current"], reverse=True)
+            department_breakdown = breakdown_list
+
     return LedgerResponse(
         meta=_meta_from_dict(bundle.meta),
         ledger=name,
@@ -450,6 +600,7 @@ def ledger(
         period_total=period_total,
         closing=closing,
         running_balance=rows,
+        department_breakdown=department_breakdown,
     )
 
 
@@ -458,6 +609,7 @@ def rows(
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
     limit: int = Query(500, ge=1, le=5000),
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
     current_user: UserData = Depends(get_current_user),
 ):
     try:
@@ -465,8 +617,8 @@ def rows(
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # Apply RBAC
-    rbac_df = _apply_rbac(bundle.df, current_user)
+    # Apply RBAC with optional admin filter
+    rbac_df = _apply_rbac(bundle.df, current_user, department_key)
     df = _filter_by_date(rbac_df, start, end)
     trimmed = df.head(limit)
     records = _df_to_records(trimmed)
@@ -475,14 +627,17 @@ def rows(
 
 
 @app.get("/api/home", response_model=HomeDataResponse)
-def home(current_user: UserData = Depends(get_current_user)):
+def home(
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
+    current_user: UserData = Depends(get_current_user)
+):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # Apply RBAC
-    df = _apply_rbac(bundle.df, current_user)
+    # Apply RBAC with optional admin filter
+    df = _apply_rbac(bundle.df, current_user, department_key)
     
     revenue_keywords = config.get("revenue_keywords", [])
     expense_keywords = config.get("expense_keywords", [])
@@ -525,14 +680,17 @@ def home(current_user: UserData = Depends(get_current_user)):
 
 
 @app.get("/api/income", response_model=IncomeResponse)
-def income(current_user: UserData = Depends(get_current_user)):
+def income(
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
+    current_user: UserData = Depends(get_current_user)
+):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # Apply RBAC
-    df = _apply_rbac(bundle.df, current_user)
+    # Apply RBAC with optional admin filter
+    df = _apply_rbac(bundle.df, current_user, department_key)
     
     revenue_keywords = config.get("revenue_keywords", [])
     expense_keywords = config.get("expense_keywords", [])
@@ -551,6 +709,7 @@ def income(current_user: UserData = Depends(get_current_user)):
             ledger=row["ledger"],
             current_amount=float(row["current_amount"]),
             previous_amount=float(row["previous_amount"]),
+            two_months_ago_amount=float(row["two_months_ago_amount"]),
             variance_pct=float(row["variance_pct"])
         )
         for _, row in income_details.iterrows()
@@ -565,14 +724,17 @@ def income(current_user: UserData = Depends(get_current_user)):
 
 
 @app.get("/api/expense", response_model=ExpenseResponse)
-def expense(current_user: UserData = Depends(get_current_user)):
+def expense(
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
+    current_user: UserData = Depends(get_current_user)
+):
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # Apply RBAC
-    df = _apply_rbac(bundle.df, current_user)
+    # Apply RBAC with optional admin filter
+    df = _apply_rbac(bundle.df, current_user, department_key)
     
     revenue_keywords = config.get("revenue_keywords", [])
     expense_keywords = config.get("expense_keywords", [])
@@ -591,6 +753,7 @@ def expense(current_user: UserData = Depends(get_current_user)):
             ledger=row["ledger"],
             current_amount=float(row["current_amount"]),
             previous_amount=float(row["previous_amount"]),
+            two_months_ago_amount=float(row["two_months_ago_amount"]),
             variance_pct=float(row["variance_pct"])
         )
         for _, row in expense_details.iterrows()
@@ -601,6 +764,134 @@ def expense(current_user: UserData = Depends(get_current_user)):
         total_expense=total_expense,
         current_month=current_month,
         items=items,
+    )
+
+
+@app.get("/api/monthly_trends", response_model=MonthlyTrendsResponse)
+def monthly_trends(
+    months: Optional[int] = Query(None, ge=1, le=24, description="Number of months to fetch"),
+    from_date: Optional[str] = Query(None, description="Start month (YYYY-MM)"),
+    to_date: Optional[str] = Query(None, description="End month (YYYY-MM)"),
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
+    current_user: UserData = Depends(get_current_user),
+):
+    """Get monthly aggregated trends for income, expense, and profit.
+    
+    Can specify either:
+    - `months`: Number of recent months (default: 3)
+    - `from_date` and `to_date`: Custom range (YYYY-MM format)
+    """
+    try:
+        bundle = data_cache.get_bundle()
+    except ExcelLoadError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    # Apply RBAC filtering
+    df = _apply_rbac(bundle.df, current_user, department_key)
+    
+    if df.empty:
+        return MonthlyTrendsResponse(
+            meta=_meta_from_dict(bundle.meta),
+            trends=[],
+            summary=MonthlyTrendsSummary(
+                avg_income=0.0,
+                avg_expense=0.0,
+                avg_profit=0.0
+            )
+        )
+    
+    revenue_keywords = config.get("revenue_keywords", [])
+    expense_keywords = config.get("expense_keywords", [])
+    
+    # Add month column
+    df["month"] = df["date"].dt.to_period("M")
+    
+    # Determine date range
+    if from_date and to_date:
+        # Custom range
+        try:
+            start_period = pd.Period(from_date, freq="M")
+            end_period = pd.Period(to_date, freq="M")
+        except ValueError:
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid date format. Use YYYY-MM (e.g., 2026-01)"
+            )
+    else:
+        # Last N months (default: 3)
+        n_months = months if months else 3
+        end_period = df["month"].max()
+        start_period = end_period - (n_months - 1)
+    
+    # Filter by date range
+    df_filtered = df[(df["month"] >= start_period) & (df["month"] <= end_period)]
+    
+    # Determine which column to use for filtering (primary_group or ledger)
+    filter_col = "primary_group" if "primary_group" in df_filtered.columns else "ledger"
+    
+    # Group by month
+    monthly_data = []
+    for period in pd.period_range(start=start_period, end=end_period, freq="M"):
+        month_df = df_filtered[df_filtered["month"] == period]
+        
+        # Calculate income (revenue ledgers)
+        if revenue_keywords and filter_col in month_df.columns:
+            filter_series = month_df[filter_col].astype(str)
+            revenue_pattern = "|".join(revenue_keywords)
+            income_mask = filter_series.str.contains(revenue_pattern, case=False, na=False)
+            income = float(month_df.loc[income_mask, "amount"].sum()) if income_mask.any() else 0.0
+        else:
+            income = 0.0
+        
+        # Calculate expense (expense ledgers)
+        if expense_keywords and filter_col in month_df.columns:
+            filter_series = month_df[filter_col].astype(str)
+            expense_pattern = "|".join(expense_keywords)
+            expense_mask = filter_series.str.contains(expense_pattern, case=False, na=False)
+            expense = float(abs(month_df.loc[expense_mask, "amount"].sum())) if expense_mask.any() else 0.0
+        else:
+            expense = 0.0
+        
+        profit = income - expense
+        
+        monthly_data.append({
+            "month": str(period),
+            "month_label": period.strftime("%b %Y"),
+            "income": income,
+            "expense": expense,
+            "profit": profit
+        })
+    
+    # Calculate summary statistics
+    if monthly_data:
+        avg_income = sum(m["income"] for m in monthly_data) / len(monthly_data)
+        avg_expense = sum(m["expense"] for m in monthly_data) / len(monthly_data)
+        avg_profit = sum(m["profit"] for m in monthly_data) / len(monthly_data)
+        
+        # Find best and worst months by profit
+        best = max(monthly_data, key=lambda x: x["profit"])
+        worst = min(monthly_data, key=lambda x: x["profit"])
+        
+        summary = MonthlyTrendsSummary(
+            avg_income=avg_income,
+            avg_expense=avg_expense,
+            avg_profit=avg_profit,
+            best_month=best["month_label"],
+            worst_month=worst["month_label"]
+        )
+    else:
+        summary = MonthlyTrendsSummary(
+            avg_income=0.0,
+            avg_expense=0.0,
+            avg_profit=0.0
+        )
+    
+    trends = [MonthlyTrendPoint(**m) for m in monthly_data]
+    
+    return MonthlyTrendsResponse(
+        meta=_meta_from_dict(bundle.meta),
+        trends=trends,
+        summary=summary
     )
 
 

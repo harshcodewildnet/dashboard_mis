@@ -1,31 +1,66 @@
+import { BarChart } from "@mantine/charts";
 import { Button, Grid, Group, Paper, Select, Stack, Table, Text } from "@mantine/core";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useLedger, useLedgers } from "../api/hooks";
 import { ChartCard } from "../components/ChartCard";
 import { DateRangePicker } from "../components/DateRangePicker";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
 
-export function LedgerPage() {
-  const ledgersQuery = useLedgers();
+interface LedgerPageProps {
+  departmentKey?: string | null;
+}
+
+export function LedgerPage({ departmentKey }: LedgerPageProps) {
+  const [searchParams] = useSearchParams();
+  const ledgersQuery = useLedgers(departmentKey);
   const [selected, setSelected] = useState<string | null>(null);
   const [range, setRange] = useState<[Date | null, Date | null]>([null, null]);
 
+  const formatCurrency = (amount: number) => `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const formatVariance = (variance: number) => `${variance > 0 ? "+" : ""}${variance.toFixed(1)}%`;
+
+  const getVarianceColor = (variance: number) => {
+    if (variance > 0) return "red.6";
+    if (variance < 0) return "green.6";
+    return "gray.6";
+  };
+
+  // Reset selected ledger when department changes
   useEffect(() => {
-    if (!selected && ledgersQuery.data && ledgersQuery.data.length) {
+    setSelected(null);
+  }, [departmentKey]);
+
+  // Auto-select ledger from URL query parameter or default to first ledger
+  useEffect(() => {
+    const ledgerFromUrl = searchParams.get("name");
+
+    if (ledgerFromUrl && ledgersQuery.data) {
+      // If URL has a ledger name and it exists in the list, select it
+      const ledgerExists = ledgersQuery.data.includes(ledgerFromUrl);
+      if (ledgerExists) {
+        setSelected(ledgerFromUrl);
+      } else if (!selected && ledgersQuery.data.length) {
+        // If ledger from URL doesn't exist, fall back to first ledger
+        setSelected(ledgersQuery.data[0]);
+      }
+    } else if (!selected && ledgersQuery.data && ledgersQuery.data.length) {
+      // No URL parameter, select first ledger
       setSelected(ledgersQuery.data[0]);
     }
-  }, [selected, ledgersQuery.data]);
+  }, [searchParams, selected, ledgersQuery.data]);
 
   const params = useMemo(() => {
     const [start, end] = range;
     return {
       name: selected || "",
       start: start ? dayjs(start).format("YYYY-MM-DD") : undefined,
-      end: end ? dayjs(end).format("YYYY-MM-DD") : undefined
+      end: end ? dayjs(end).format("YYYY-MM-DD") : undefined,
+      departmentKey
     };
-  }, [selected, range]);
+  }, [selected, range, departmentKey]);
 
   const ledgerQuery = useLedger(params);
 
@@ -92,8 +127,67 @@ export function LedgerPage() {
           </Paper>
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 8 }}>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 8 }}>
           <ChartCard title="Running Balance" option={balanceOption} height={320} />
         </Grid.Col>
+
+        {data.department_breakdown && (
+          <Grid.Col span={12}>
+            <Paper withBorder radius="lg" p="md">
+              <Text fw={600} mb="md">
+                Department Breakdown (Current Month)
+              </Text>
+              <div className="chart-container">
+                <BarChart
+                  h={300}
+                  data={data.department_breakdown}
+                  dataKey="label"
+                  type="default"
+                  series={[
+                    { name: "current", color: "blue.6", label: "Current Month" },
+                    { name: "previous", color: "gray.5", label: "Previous Month" }
+                  ]}
+                  tickLine="xy"
+                  gridAxis="xy"
+                  tooltipAnimationDuration={200}
+                  withTooltip
+                  barProps={{ activeBar: false }}
+                  tooltipProps={{
+                    content: ({ label, payload }) => {
+                      if (!payload || payload.length === 0) return null;
+                      // We expect payload to have data from the item
+                      // payload[0].payload contains the full data object (current, previous, variance)
+                      const item = payload[0].payload;
+
+                      return (
+                        <Paper px="md" py="sm" withBorder shadow="md" radius="md">
+                          <Text fw={600} size="sm" mb={4} style={{ borderBottom: "1px solid #eee", paddingBottom: 4 }}>
+                            {label}
+                          </Text>
+                          <Group justify="space-between" gap="xl" mb={4}>
+                            <Text size="xs" c="dimmed">Current</Text>
+                            <Text size="sm" fw={600} c="blue.7">{formatCurrency(item.current)}</Text>
+                          </Group>
+                          <Group justify="space-between" gap="xl" mb={4}>
+                            <Text size="xs" c="dimmed">Previous</Text>
+                            <Text size="sm" fw={500} c="gray.6">{formatCurrency(item.previous)}</Text>
+                          </Group>
+                          <Group justify="space-between" gap="xl" pt={4} style={{ borderTop: "1px dashed #eee" }}>
+                            <Text size="xs" c="dimmed">Variance</Text>
+                            <Text size="sm" fw={700} c={getVarianceColor(item.variance)}>
+                              {formatVariance(item.variance)}
+                            </Text>
+                          </Group>
+                        </Paper>
+                      );
+                    }
+                  }}
+                />
+              </div>
+            </Paper>
+          </Grid.Col>
+        )}
       </Grid>
 
       <Paper withBorder radius="lg" p="md">

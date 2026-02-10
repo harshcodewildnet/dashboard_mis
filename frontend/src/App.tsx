@@ -20,6 +20,7 @@ import { SalesPage } from "./pages/SalesPage";
 import { SummaryPage } from "./pages/SummaryPage";
 import { LoginPage } from "./pages/LoginPage";
 import { auth } from "./auth/auth";
+import { DepartmentFilter } from "./components/DepartmentFilter";
 
 const links = [
   { label: "Home", to: "/", icon: <IconHome size={16} /> },
@@ -33,6 +34,7 @@ const links = [
 export default function App() {
   const [opened, { toggle, close }] = useDisclosure();
   const [authenticated, setAuthenticated] = useState(auth.isAuthenticated());
+  const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -74,6 +76,7 @@ export default function App() {
             <Text fw={700}>MIS Dashboard</Text>
           </Group>
           <Group gap="sm">
+            <DepartmentFilter value={selectedDepartment} onChange={setSelectedDepartment} />
             <Text size="sm" c="dimmed">
               {auth.getUser()?.email}
             </Text>
@@ -109,13 +112,13 @@ export default function App() {
 
       <AppShell.Main>
         <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/income" element={<IncomePage />} />
-          <Route path="/expense" element={<ExpensePage />} />
-          <Route path="/sales" element={<SalesPage />} />
-          <Route path="/ledger" element={<LedgerPage />} />
-          <Route path="/rows" element={<RowsPage />} />
-          <Route path="/summary" element={<SummaryPage />} />
+          <Route path="/" element={<HomePage departmentKey={selectedDepartment} />} />
+          <Route path="/income" element={<IncomePage departmentKey={selectedDepartment} />} />
+          <Route path="/expense" element={<ExpensePage departmentKey={selectedDepartment} />} />
+          <Route path="/sales" element={<SalesPage departmentKey={selectedDepartment} />} />
+          <Route path="/ledger" element={<LedgerPage departmentKey={selectedDepartment} />} />
+          <Route path="/rows" element={<RowsPage departmentKey={selectedDepartment} />} />
+          <Route path="/summary" element={<SummaryPage departmentKey={selectedDepartment} />} />
         </Routes>
       </AppShell.Main>
     </AppShell>

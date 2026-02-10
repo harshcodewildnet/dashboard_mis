@@ -1,5 +1,12 @@
 export type SeriesPoint = { label: string; value: number };
 
+export type DepartmentComparisonItem = {
+  label: string;
+  current: number;
+  previous: number;
+  variance: number;
+};
+
 export type MetaPayload = {
   file_name: string;
   sheet: string;
@@ -49,6 +56,7 @@ export type LedgerResponse = {
   period_total: number;
   closing: number;
   running_balance: LedgerRow[];
+  department_breakdown?: DepartmentComparisonItem[];
 };
 
 export type RowsResponse = {
@@ -61,6 +69,7 @@ export type VarianceItem = {
   ledger: string;
   current_amount: number;
   previous_amount: number;
+  two_months_ago_amount: number;
   variance_pct: number;
 };
 
@@ -96,3 +105,26 @@ export type HomeDataResponse = {
   monthly_expenses: MonthlyExpenseItem[];
   daily_profit: Record<string, unknown>[];
 };
+
+export type MonthlyTrendPoint = {
+  month: string;
+  month_label: string;
+  income: number;
+  expense: number;
+  profit: number;
+};
+
+export type MonthlyTrendsSummary = {
+  avg_income: number;
+  avg_expense: number;
+  avg_profit: number;
+  best_month?: string | null;
+  worst_month?: string | null;
+};
+
+export type MonthlyTrendsResponse = {
+  meta: MetaPayload;
+  trends: MonthlyTrendPoint[];
+  summary: MonthlyTrendsSummary;
+};
+

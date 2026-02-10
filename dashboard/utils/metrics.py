@@ -174,10 +174,11 @@ def get_monthly_expenses_table(df: pd.DataFrame, expense_keywords: List[str], n_
 def get_income_detail_with_variance(df: pd.DataFrame, revenue_keywords: List[str]) -> pd.DataFrame:
     """Get income breakdown by ledger with month-over-month variance"""
     if df.empty:
-        return pd.DataFrame(columns=["ledger", "current_amount", "previous_amount", "variance_pct"])
+        return pd.DataFrame(columns=["ledger", "current_amount", "previous_amount", "two_months_ago_amount", "variance_pct"])
     
     current_month = df["date"].max().to_period("M")
     previous_month = current_month - 1
+    two_months_ago = current_month - 2
     
     filter_col = _get_filter_column(df)
     filter_series = df[filter_col].astype(str)
@@ -187,6 +188,7 @@ def get_income_detail_with_variance(df: pd.DataFrame, revenue_keywords: List[str
     
     current_data = revenue_df[revenue_df["month"] == current_month].groupby("ledger")["amount"].sum()
     previous_data = revenue_df[revenue_df["month"] == previous_month].groupby("ledger")["amount"].sum()
+    two_months_ago_data = revenue_df[revenue_df["month"] == two_months_ago].groupby("ledger")["amount"].sum()
     
     result = pd.DataFrame({
         "ledger": current_data.index,
@@ -194,6 +196,7 @@ def get_income_detail_with_variance(df: pd.DataFrame, revenue_keywords: List[str
     })
     
     result["previous_amount"] = result["ledger"].map(previous_data).fillna(0)
+    result["two_months_ago_amount"] = result["ledger"].map(two_months_ago_data).fillna(0)
     result["variance_pct"] = ((result["current_amount"] - result["previous_amount"]) / result["previous_amount"].replace(0, 1)) * 100
     result = result.sort_values("current_amount", ascending=False)
     
@@ -203,10 +206,11 @@ def get_income_detail_with_variance(df: pd.DataFrame, revenue_keywords: List[str
 def get_expense_detail_with_variance(df: pd.DataFrame, expense_keywords: List[str]) -> pd.DataFrame:
     """Get expense breakdown by ledger with month-over-month variance"""
     if df.empty:
-        return pd.DataFrame(columns=["ledger", "current_amount", "previous_amount", "variance_pct"])
+        return pd.DataFrame(columns=["ledger", "current_amount", "previous_amount", "two_months_ago_amount", "variance_pct"])
     
     current_month = df["date"].max().to_period("M")
     previous_month = current_month - 1
+    two_months_ago = current_month - 2
     
     filter_col = _get_filter_column(df)
     filter_series = df[filter_col].astype(str)
@@ -217,6 +221,7 @@ def get_expense_detail_with_variance(df: pd.DataFrame, expense_keywords: List[st
     
     current_data = expense_df[expense_df["month"] == current_month].groupby("ledger")["amount"].sum()
     previous_data = expense_df[expense_df["month"] == previous_month].groupby("ledger")["amount"].sum()
+    two_months_ago_data = expense_df[expense_df["month"] == two_months_ago].groupby("ledger")["amount"].sum()
     
     result = pd.DataFrame({
         "ledger": current_data.index,
@@ -224,6 +229,7 @@ def get_expense_detail_with_variance(df: pd.DataFrame, expense_keywords: List[st
     })
     
     result["previous_amount"] = result["ledger"].map(previous_data).fillna(0)
+    result["two_months_ago_amount"] = result["ledger"].map(two_months_ago_data).fillna(0)
     result["variance_pct"] = ((result["current_amount"] - result["previous_amount"]) / result["previous_amount"].replace(0, 1)) * 100
     result = result.sort_values("current_amount", ascending=False)
     

@@ -8,7 +8,11 @@ import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
 import { StatGrid } from "../components/StatGrid";
 
-export function SummaryPage() {
+interface SummaryPageProps {
+  departmentKey?: string | null;
+}
+
+export function SummaryPage({ departmentKey }: SummaryPageProps) {
   const [range, setRange] = useState<[Date | null, Date | null]>([null, null]);
 
   const params = useMemo(() => {

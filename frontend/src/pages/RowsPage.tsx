@@ -6,7 +6,11 @@ import { DateRangePicker } from "../components/DateRangePicker";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
 
-export function RowsPage() {
+interface RowsPageProps {
+  departmentKey?: string | null;
+}
+
+export function RowsPage({ departmentKey }: RowsPageProps) {
   const [range, setRange] = useState<[Date | null, Date | null]>([null, null]);
   const [limit, setLimit] = useState<number>(200);
 

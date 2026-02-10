@@ -2,8 +2,8 @@ from sqlalchemy import create_engine, Column, Integer, String, Boolean, ForeignK
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from pathlib import Path
 
-# Use an absolute path for the database to avoid confusion
-DB_PATH = Path(__file__).resolve().parents[1] / "dashboard.db"
+# Store database in the data folder (mounted from host machine for persistence)
+DB_PATH = Path(__file__).resolve().parents[1] / "data" / "dashboard.db"
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
