@@ -128,3 +128,44 @@ export type MonthlyTrendsResponse = {
   summary: MonthlyTrendsSummary;
 };
 
+export type MonthlyCostCenterProfit = {
+  cost_center: string;
+  months: Record<string, number>;
+  total: number;
+};
+
+export type ProfitByCostCenterResponse = {
+  meta: MetaPayload;
+  matrix: MonthlyCostCenterProfit[];
+  monthly_totals: Record<string, number>;
+  month_labels: string[];
+};
+
+export type MonthlyClientProfit = {
+  client: string;
+  months: Record<string, number>;
+  total: number;
+  deviation?: number;
+};
+
+export type ProfitByClientResponse = {
+  meta: MetaPayload;
+  matrix: MonthlyClientProfit[];
+  monthly_totals: Record<string, number>;
+  month_labels: string[];
+  deviation_label?: string;
+};
+
+export type ExpenseNode = {
+  id: string;
+  label: string;
+  months: number[];
+  total: number;
+  isSalary?: boolean;
+  empId?: string;
+  children?: ExpenseNode[];
+};
+
+export type ExpenseHierarchyResponse = {
+  hierarchy: ExpenseNode[];
+};

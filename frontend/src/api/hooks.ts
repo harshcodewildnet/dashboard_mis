@@ -7,9 +7,12 @@ import {
   LedgerResponse,
   MetaPayload,
   MonthlyTrendsResponse,
+  ProfitByCostCenterResponse,
   RowsResponse,
   SalesResponse,
-  SummaryResponse
+  SummaryResponse,
+  ProfitByClientResponse,
+  ExpenseHierarchyResponse
 } from "./types";
 
 export const useMeta = () =>
@@ -91,7 +94,6 @@ export const useSales = (params: { start?: string; end?: string; top?: number; d
 export const useLedger = (params: { name: string; start?: string; end?: string; departmentKey?: string | null }) =>
   useQuery({
     queryKey: ["ledger", params],
-    enabled: Boolean(params.name),
     queryFn: async () => {
       const apiParams: Record<string, any> = { name: params.name };
       if (params.start) apiParams.start = params.start;
@@ -135,3 +137,33 @@ export const useMonthlyTrends = (params: {
     }
   });
 
+export const useProfitByCostCenter = (departmentKey?: string | null) =>
+  useQuery({
+    queryKey: ["profit_by_cost_center", departmentKey],
+    queryFn: async () => {
+      const params = departmentKey ? { department_key: departmentKey } : {};
+      const res = await api.get<ProfitByCostCenterResponse>("/api/profit_by_cost_center", { params });
+      return res.data;
+    }
+  });
+
+export const useProfitByClient = (departmentKey?: string | null, limit: number = 20, sort: "asc" | "desc" = "desc", sortBy: "total" | "deviation" = "total") =>
+  useQuery({
+    queryKey: ["profit_by_client", departmentKey, limit, sort, sortBy],
+    queryFn: async () => {
+      const params: any = { limit, sort, sort_by: sortBy };
+      if (departmentKey) params.department_key = departmentKey;
+      const res = await api.get<ProfitByClientResponse>("/api/profit_by_client", { params });
+      return res.data;
+    }
+  });
+
+export const useExpenseHierarchy = (departmentKey?: string | null) =>
+  useQuery({
+    queryKey: ["expense_hierarchy", departmentKey],
+    queryFn: async () => {
+      const params = departmentKey ? { department_key: departmentKey } : {};
+      const res = await api.get<ExpenseHierarchyResponse>("/api/expenses/hierarchy", { params });
+      return res.data;
+    }
+  });

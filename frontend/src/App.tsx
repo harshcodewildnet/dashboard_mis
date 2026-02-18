@@ -24,7 +24,7 @@ import { DepartmentFilter } from "./components/DepartmentFilter";
 
 const links = [
   { label: "Home", to: "/", icon: <IconHome size={16} /> },
-  { label: "Income Details", to: "/income", icon: <IconCoin size={16} /> },
+  { label: "Revenue Details", to: "/income", icon: <IconCoin size={16} /> },
   { label: "Expense Details", to: "/expense", icon: <IconReceipt size={16} /> },
   { label: "Sales", to: "/sales", icon: <IconShoppingBag size={16} /> },
   { label: "Ledger Explorer", to: "/ledger", icon: <IconChartArea size={16} /> },

@@ -38,6 +38,7 @@ COLUMN_MAPPING: Dict[str, List[str]] = {
     "quantity": ["quantity", "qty", "units"],
     "item": ["item", "product", "item_name", "stock_item"],
     "cost_centre": ["cost_centre", "cost_center", "department", "project"],
+    "cost_centre_parent": ["alloc_parent_template", "cost_centre_parent", "cost_center_parent", "parent_cost_centre", "parent_cost_center"],
     "debit": ["debit", "dr", "amount_dr"],
     "credit": ["credit", "cr", "amount_cr"],
     "primary_group": ["primary_group", "primary group", "group", "account_group"],
@@ -100,6 +101,7 @@ def _resolve_columns(df: pd.DataFrame) -> pd.DataFrame:
         "quantity",
         "item",
         "cost_centre",
+        "cost_centre_parent",
         "debit",
         "credit",
         "primary_group",
@@ -134,6 +136,19 @@ def _resolve_columns(df: pd.DataFrame) -> pd.DataFrame:
             raise ExcelLoadError(
                 f"Missing required columns: {', '.join(missing_required)}. Available: {', '.join(df.columns)}"
             )
+
+    # Drop existing columns that would cause a collision with renamed targets
+    existing_cols = set(df.columns)
+    targets = set(renamed.values())
+    sources = set(renamed.keys())
+    
+    # Columns that exist, are target names, but are NOT being renamed themselves
+    # (e.g. 'cost_centre_parent' exists, we are renaming 'alloc_parent_template' to 'cost_centre_parent',
+    # so we must drop original 'cost_centre_parent')
+    collisions = [col for col in existing_cols if col in targets and col not in sources]
+    
+    if collisions:
+        df = df.drop(columns=collisions)
 
     df = df.rename(columns=renamed)
 

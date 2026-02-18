@@ -3,9 +3,11 @@ import { BarChart } from "@mantine/charts";
 import { IconArrowDown, IconArrowUp, IconArrowsSort } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useExpense } from "../api/hooks";
+import { useExpense, useExpenseHierarchy } from "../api/hooks";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
+import { HierarchicalExpenseTable } from "../components/HierarchicalExpenseTable";
+import { getYAxisWidth, formatCurrency } from "../utils/chartHelpers";
 
 interface ExpensePageProps {
   departmentKey?: string | null;
@@ -13,6 +15,7 @@ interface ExpensePageProps {
 
 export function ExpensePage({ departmentKey }: ExpensePageProps) {
   const query = useExpense(departmentKey);
+  const hierarchyQuery = useExpenseHierarchy(departmentKey);
   const [sortBy, setSortBy] = useState<"amount" | "variance" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
@@ -31,8 +34,6 @@ export function ExpensePage({ departmentKey }: ExpensePageProps) {
   if (!query.data) return null;
 
   const { total_expense, current_month, items: rawItems } = query.data;
-
-  const formatCurrency = (amount: number) => `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   const formatVariance = (variance: number) => `${variance > 0 ? "+" : ""}${variance.toFixed(1)}%`;
 
   const getVarianceColor = (variance: number) => {
@@ -83,6 +84,14 @@ export function ExpensePage({ departmentKey }: ExpensePageProps) {
             {formatCurrency(total_expense)}
           </Title>
         </Stack>
+      </Paper>
+
+      {/* Hierarchical Expense Table */}
+      <Paper p="md" radius="md" withBorder>
+        <HierarchicalExpenseTable
+          data={hierarchyQuery.data?.hierarchy || []}
+          isLoading={hierarchyQuery.isLoading}
+        />
       </Paper>
 
       {/* Table */}
@@ -176,7 +185,15 @@ export function ExpensePage({ departmentKey }: ExpensePageProps) {
               series={[{ name: "amount", label: "Amount", color: "red" }]}
               tickLine="y"
               orientation="horizontal"
-              yAxisProps={{ width: 150 }}
+              yAxisProps={{
+                width: getYAxisWidth(top10.map(i => i.current_amount))
+              }}
+              xAxisProps={{
+                interval: 0,
+                angle: -30,
+                textAnchor: 'end',
+                height: 80
+              }}
               valueFormatter={(value) => formatCurrency(value as number)}
               withTooltip={true}
               barProps={{ activeBar: false }}

@@ -1,6 +1,7 @@
 import { LineChart } from "@mantine/charts";
 import { Paper, Title, Group, Text, Box } from "@mantine/core";
 import { MonthlyTrendPoint } from "../api/types";
+import { getYAxisWidth, formatCurrency } from "../utils/chartHelpers";
 
 export interface TrendChartProps {
     data: MonthlyTrendPoint[];
@@ -16,8 +17,6 @@ export function TrendChart({ data, dataKey, title, color, height = 300 }: TrendC
         month: point.month_label,
         value: point[dataKey],
     }));
-
-    const formatCurrency = (val: number) => `₹${val.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
     // Determine color for profit (green if positive, red if negative)
     const values = data.map((p) => p[dataKey]);
@@ -44,6 +43,7 @@ export function TrendChart({ data, dataKey, title, color, height = 300 }: TrendC
                     withLegend={false}
                     withDots
                     gridAxis="xy"
+                    yAxisProps={{ width: getYAxisWidth(values) }}
                     valueFormatter={(value) => formatCurrency(value as number)}
                     tooltipProps={{
                         content: ({ label, payload }) => {

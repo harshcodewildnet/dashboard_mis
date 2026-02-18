@@ -7,6 +7,7 @@ import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
 import { MonthRangeFilter } from "../components/MonthRangeFilter";
 import { TrendChart } from "../components/TrendChart";
+import { getYAxisWidth, formatCurrency } from "../utils/chartHelpers";
 
 interface HomePageProps {
   departmentKey?: string | null;
@@ -33,14 +34,13 @@ export function HomePage({ departmentKey }: HomePageProps) {
   if (!query.data) return null;
 
   const data = query.data;
-  const formatCurrency = (amount: number) => `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   const profitColor = data.profit >= 0 ? "#10b981" : "#ef4444";
 
   // Transform main trends for multi-line chart
   const mainChartData = mainTrends.data?.trends.map((item) => ({
     month: item.month_label,
-    Income: item.income,
+    Revenue: item.income,
     Expense: item.expense,
     Profit: item.profit,
   })) || [];
@@ -67,7 +67,7 @@ export function HomePage({ departmentKey }: HomePageProps) {
             onClick={() => navigate("/income")}
           >
             <Stack gap="xs">
-              <Text size="lg" opacity={0.9}>Income</Text>
+              <Text size="lg" opacity={0.9}>Revenue</Text>
               <Title order={1} size="2.5rem">{formatCurrency(data.income)}</Title>
             </Stack>
           </Paper>
@@ -78,7 +78,7 @@ export function HomePage({ departmentKey }: HomePageProps) {
             color="violet"
             onClick={() => navigate("/income")}
           >
-            📈 View Income Details
+            📈 View Revenue Details
           </Button>
         </Grid.Col>
 
@@ -141,35 +141,57 @@ export function HomePage({ departmentKey }: HomePageProps) {
           ) : mainTrends.isError ? (
             <ErrorState message="Failed to load trends" onRetry={() => mainTrends.refetch()} />
           ) : (
-            <Box h={400}>
-              <LineChart
-                h={380}
-                data={mainChartData}
-                dataKey="month"
-                series={[
-                  { name: "Income", color: "#3b82f6" },
-                  { name: "Expense", color: "#f97316" },
-                  { name: "Profit", color: "#10b981" }
-                ]}
-                curveType="monotone"
-                valueFormatter={(value) => formatCurrency(value as number)}
-                tooltipProps={{
-                  content: ({ label, payload }) => {
-                    if (!payload || payload.length === 0) return null;
-                    return (
-                      <Paper px="md" py="sm" withBorder shadow="md" radius="md" style={{ backgroundColor: "white" }}>
-                        <Text fw={500} mb={5}>{label}</Text>
-                        {payload.map((item: any) => (
-                          <Text key={item.name} size="sm" style={{ color: item.color }}>
-                            {item.name}: {formatCurrency(item.value)}
-                          </Text>
-                        ))}
-                      </Paper>
-                    );
-                  }
-                }}
-              />
-            </Box>
+            <>
+              {/* Custom Horizontal Legend */}
+              <Group justify="center" gap="xl" mb="sm">
+                <Group gap={8}>
+                  <Box w={12} h={12} bg="#3b82f6" style={{ borderRadius: '50%' }} />
+                  <Text size="sm" fw={500}>Revenue</Text>
+                </Group>
+                <Group gap={8}>
+                  <Box w={12} h={12} bg="#f97316" style={{ borderRadius: '50%' }} />
+                  <Text size="sm" fw={500}>Expense</Text>
+                </Group>
+                <Group gap={8}>
+                  <Box w={12} h={12} bg="#10b981" style={{ borderRadius: '50%' }} />
+                  <Text size="sm" fw={500}>Profit</Text>
+                </Group>
+              </Group>
+
+              <Box h={400}>
+                <LineChart
+                  h={380}
+                  data={mainChartData}
+                  dataKey="month"
+                  series={[
+                    { name: "Revenue", color: "#3b82f6" },
+                    { name: "Expense", color: "#f97316" },
+                    { name: "Profit", color: "#10b981" }
+                  ]}
+                  curveType="monotone"
+                  withLegend={false}
+                  yAxisProps={{
+                    width: getYAxisWidth(mainChartData.flatMap(d => [d.Revenue, d.Expense, d.Profit]))
+                  }}
+                  valueFormatter={(value) => formatCurrency(value as number)}
+                  tooltipProps={{
+                    content: ({ label, payload }) => {
+                      if (!payload || payload.length === 0) return null;
+                      return (
+                        <Paper px="md" py="sm" withBorder shadow="md" radius="md" style={{ backgroundColor: "white" }}>
+                          <Text fw={500} mb={5}>{label}</Text>
+                          {payload.map((item: any) => (
+                            <Text key={item.name} size="sm" style={{ color: item.color }}>
+                              {item.name}: {formatCurrency(item.value)}
+                            </Text>
+                          ))}
+                        </Paper>
+                      );
+                    }
+                  }}
+                />
+              </Box>
+            </>
           )}
         </Stack>
       </Paper>
@@ -223,7 +245,7 @@ export function HomePage({ departmentKey }: HomePageProps) {
         <Grid.Col span={{ base: 12, md: 4 }}>
           <Stack gap="md" h="100%">
             <Group justify="space-between">
-              <Title order={4}>💰 Income Trend</Title>
+              <Title order={4}>💰 Revenue Trend</Title>
               <MonthRangeFilter value={incomeRange} onChange={setIncomeRange} defaultMonths={3} />
             </Group>
             {incomeTrends.isLoading ? (
@@ -234,7 +256,7 @@ export function HomePage({ departmentKey }: HomePageProps) {
               <TrendChart
                 data={incomeTrends.data?.trends || []}
                 dataKey="income"
-                title="Income"
+                title="Revenue"
                 color="#3b82f6"
                 height={300}
               />

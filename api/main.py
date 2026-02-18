@@ -21,6 +21,7 @@ from dashboard.utils.metrics import (
     get_expense_detail_with_variance,
     get_income_detail_with_variance,
     get_monthly_expenses_table,
+    get_monthly_profit_by_cost_center,
     group_summary,
     ledger_statement,
     monthly_totals,
@@ -28,6 +29,8 @@ from dashboard.utils.metrics import (
     sales_by_month,
     top_customers,
     top_ledgers,
+    get_monthly_profit_by_client,
+    get_hierarchical_expenses,
 )
 
 # Auth Imports
@@ -284,6 +287,35 @@ class MonthlyTrendsResponse(BaseModel):
     summary: MonthlyTrendsSummary
 
 
+class MonthlyCostCenterProfit(BaseModel):
+    cost_center: str
+    months: Dict[str, float]
+    total: float
+
+
+class ProfitByCostCenterResponse(BaseModel):
+    meta: MetaPayload
+    matrix: List[MonthlyCostCenterProfit]
+    monthly_totals: Dict[str, float]
+    month_labels: List[str]
+
+
+class MonthlyClientProfit(BaseModel):
+    client: str
+    months: Dict[str, float]
+    total: float
+    deviation: Optional[float] = None
+
+
+class ProfitByClientResponse(BaseModel):
+    meta: MetaPayload
+    matrix: List[MonthlyClientProfit]
+    monthly_totals: Dict[str, float]
+    month_labels: List[str]
+    deviation_label: Optional[str] = None
+
+
+
 def _meta_from_dict(meta: Dict[str, Any]) -> MetaPayload:
     return MetaPayload(
         file_name=Path(meta["file_path"]).name,
@@ -312,9 +344,18 @@ config = load_config(CONFIG_PATH)
 data_cache = DataCache(config)
 
 app = FastAPI(title="MIS Dashboard API", version="0.1.0")
+origins = [
+    "http://localhost:5173",
+    "http://localhost:4173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:4173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -895,6 +936,235 @@ def monthly_trends(
     )
 
 
+@app.get("/api/profit_by_cost_center", response_model=ProfitByCostCenterResponse)
+def profit_by_cost_center(
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
+    current_user: UserData = Depends(get_current_user),
+):
+    """Get monthly profit breakdown by cost center for current year.
+    
+    Returns a matrix with cost centers as rows and months as columns.
+    """
+    try:
+        bundle = data_cache.get_bundle()
+    except ExcelLoadError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    # Apply RBAC filtering
+    df = _apply_rbac(bundle.df, current_user, department_key)
+    
+    if df.empty:
+        return ProfitByCostCenterResponse(
+            meta=_meta_from_dict(bundle.meta),
+            matrix=[],
+            monthly_totals={},
+            month_labels=[]
+        )
+    
+    revenue_keywords = config.get("revenue_keywords", [])
+    expense_keywords = config.get("expense_keywords", [])
+    
+    # Get the pivot table
+    pivot_df = get_monthly_profit_by_cost_center(df, revenue_keywords, expense_keywords)
+    
+    if pivot_df.empty or "cost_centre_parent" not in pivot_df.columns:
+        return ProfitByCostCenterResponse(
+            meta=_meta_from_dict(bundle.meta),
+            matrix=[],
+            monthly_totals={},
+            month_labels=[]
+        )
+    
+    # Get month columns (exclude cost_centre_parent and total)
+    month_columns = [col for col in pivot_df.columns if col not in ["cost_centre_parent", "total"]]
+    
+    # Sort month columns chronologically
+    month_columns_sorted = sorted(month_columns)
+    
+    # Create month labels (e.g., "Jan", "Feb", "Mar")
+    month_labels = [pd.Period(str(month)).strftime("%b") for month in month_columns_sorted]
+    
+    # Build matrix
+    matrix = []
+    for _, row in pivot_df.iterrows():
+        cost_center = str(row["cost_centre_parent"])
+        # Use label as key to match frontend expectation
+        months_dict = {}
+        for month in month_columns_sorted:
+            label = pd.Period(str(month)).strftime("%b")
+            months_dict[label] = float(row[month])
+        
+        total = float(row["total"]) if "total" in row else sum(months_dict.values())
+        
+        matrix.append(MonthlyCostCenterProfit(
+            cost_center=cost_center,
+            months=months_dict,
+            total=total
+        ))
+    
+    # Calculate monthly totals (sum of all cost centers for each month)
+    monthly_totals = {}
+    for month in month_columns_sorted:
+        label = pd.Period(str(month)).strftime("%b")
+        monthly_totals[label] = float(pivot_df[month].sum())
+    
+    return ProfitByCostCenterResponse(
+        meta=_meta_from_dict(bundle.meta),
+        matrix=matrix,
+        monthly_totals=monthly_totals,
+        month_labels=month_labels
+    )
+
+
+
+@app.get("/api/profit_by_client", response_model=ProfitByClientResponse)
+def profit_by_client(
+    department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
+    limit: int = Query(20, ge=1, le=500, description="Limit number of clients"),
+    sort: str = Query("desc", regex="^(asc|desc)$", description="Sort order (asc=lowest, desc=highest)"),
+    sort_by: str = Query("total", regex="^(total|deviation)$", description="Column to sort by"),
+    current_user: UserData = Depends(get_current_user),
+):
+    """Get monthly profit breakdown by client for current year.
+    
+    Returns a matrix with clients as rows and months as columns.
+    Sorted by total profit descending.
+    """
+    try:
+        bundle = data_cache.get_bundle()
+    except ExcelLoadError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    # Apply RBAC filtering
+    df = _apply_rbac(bundle.df, current_user, department_key)
+    
+    if df.empty:
+        return ProfitByClientResponse(
+            meta=_meta_from_dict(bundle.meta),
+            matrix=[],
+            monthly_totals={},
+            month_labels=[]
+        )
+    
+    revenue_keywords = config.get("revenue_keywords", [])
+    expense_keywords = config.get("expense_keywords", [])
+    
+    # Get the pivot table
+    pivot_df = get_monthly_profit_by_client(df, revenue_keywords, expense_keywords, sort_order=sort)
+    
+    if pivot_df.empty or "name" not in pivot_df.columns:
+        return ProfitByClientResponse(
+            meta=_meta_from_dict(bundle.meta),
+            matrix=[],
+            monthly_totals={},
+            month_labels=[]
+        )
+    
+    
+    # Get month columns (exclude name and total)
+    month_columns = [col for col in pivot_df.columns if col not in ["name", "total"]]
+    
+    # Sort month columns chronologically
+    month_columns_sorted = sorted(month_columns)
+    
+    # Calculate deviation for ALL clients before limiting
+    current_month_col = month_columns_sorted[-1] if month_columns_sorted else None
+    prev_month_col = month_columns_sorted[-2] if len(month_columns_sorted) >= 2 else None
+    
+    if current_month_col and prev_month_col:
+        pivot_df["deviation"] = pivot_df[current_month_col] - pivot_df[prev_month_col]
+    else:
+        pivot_df["deviation"] = 0
+        
+    # Apply requested sorting
+    if sort_by == "deviation":
+        pivot_df = pivot_df.sort_values("deviation", ascending=(sort == "asc"))
+    else:
+        pivot_df = pivot_df.sort_values("total", ascending=(sort == "asc"))
+
+    # Apply limit (Top N)
+    if limit > 0:
+        pivot_df = pivot_df.head(limit)
+    
+    # Limit to last 3 months for display
+    month_columns_display = month_columns_sorted[-3:] if len(month_columns_sorted) > 3 else month_columns_sorted
+    
+    deviation_label = None
+    if current_month_col and prev_month_col:
+        curr_label = pd.Period(str(current_month_col)).strftime("%b")
+        prev_label = pd.Period(str(prev_month_col)).strftime("%b")
+        deviation_label = f"Profit Deviation ({curr_label} vs {prev_label})"
+    
+    # Create month labels (e.g., "Jan", "Feb", "Mar") - Reversed for user request
+    month_labels = [pd.Period(str(month)).strftime("%b") for month in reversed(month_columns_display)]
+    
+    # Build matrix
+    matrix = []
+    for _, row in pivot_df.iterrows():
+        client = str(row["name"])
+        # Use label as key to match frontend expectation
+        months_dict = {}
+        total_calc = 0.0
+        for month in month_columns_display:
+            label = pd.Period(str(month)).strftime("%b")
+            val = float(row[month])
+            months_dict[label] = val
+            total_calc += val
+            
+        total = float(row["total"]) if "total" in row else total_calc
+        
+        # Use deviation from pivot_df
+        deviation = float(row["deviation"]) if "deviation" in row and not pd.isna(row["deviation"]) else None
+        
+        matrix.append(MonthlyClientProfit(
+            client=client,
+            months=months_dict,
+            total=total,
+            deviation=deviation
+        ))
+    
+    # Calculate monthly totals (sum of all clients displayed for each month)
+    monthly_totals = {}
+    for month in month_columns_display:
+        label = pd.Period(str(month)).strftime("%b")
+        monthly_totals[label] = float(pivot_df[month].sum())
+    
+    return ProfitByClientResponse(
+        meta=_meta_from_dict(bundle.meta),
+        matrix=matrix,
+        monthly_totals=monthly_totals,
+        month_labels=month_labels,
+        deviation_label=deviation_label
+    )
+
+
+@app.get("/api/expenses/hierarchy")
+def expense_hierarchy(
+    current_user: UserData = Depends(get_current_user),
+):
+    """Returns a hierarchical structure of expenses (Salary & Direct Expenses) for the current year."""
+    try:
+        bundle = data_cache.get_bundle()
+        # Get actual file path for Salary List loading
+        excel_path, _ = latest_cache_key(config["excel_loader"])
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    is_admin = current_user.role == "ADMIN"
+    user_cp = current_user.cost_centre_parent
+    print(f"Hierarchy request for user: {current_user.email}, Role: {current_user.role}, Admin: {is_admin}, CP: {user_cp}")
+    
+    hierarchy = get_hierarchical_expenses(
+        bundle.df, 
+        excel_path, 
+        user_cost_centre_parent=user_cp,
+        is_admin=is_admin
+    )
+    
+    return {"hierarchy": hierarchy}
+
+
 @app.get("/healthz")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
+

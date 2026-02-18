@@ -8,6 +8,7 @@ import { ChartCard } from "../components/ChartCard";
 import { DateRangePicker } from "../components/DateRangePicker";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
+import { getYAxisWidth, formatCurrency } from "../utils/chartHelpers";
 
 interface LedgerPageProps {
   departmentKey?: string | null;
@@ -18,8 +19,6 @@ export function LedgerPage({ departmentKey }: LedgerPageProps) {
   const ledgersQuery = useLedgers(departmentKey);
   const [selected, setSelected] = useState<string | null>(null);
   const [range, setRange] = useState<[Date | null, Date | null]>([null, null]);
-
-  const formatCurrency = (amount: number) => `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   const formatVariance = (variance: number) => `${variance > 0 ? "+" : ""}${variance.toFixed(1)}%`;
 
   const getVarianceColor = (variance: number) => {
@@ -84,7 +83,7 @@ export function LedgerPage({ departmentKey }: LedgerPageProps) {
         color: "#0ea5e9"
       }
     ],
-    grid: { left: 48, right: 16, top: 32, bottom: 48 }
+    grid: { left: getYAxisWidth(data.running_balance.map(r => r.running_balance)), right: 16, top: 32, bottom: 48 }
   };
 
   return (
@@ -116,10 +115,10 @@ export function LedgerPage({ departmentKey }: LedgerPageProps) {
         <Grid.Col span={{ base: 12, md: 4 }}>
           <Paper withBorder radius="lg" p="md">
             <Stack gap={8}>
-              <Text fw={600}>Balances</Text>
-              <Text size="sm">Opening: {data.opening.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
-              <Text size="sm">Movement: {data.period_total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
-              <Text size="sm">Closing: {data.closing.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+              <Text fw={600}>Balances (in Lakhs)</Text>
+              <Text size="sm">Opening: {formatCurrency(data.opening)}</Text>
+              <Text size="sm">Movement: {formatCurrency(data.period_total)}</Text>
+              <Text size="sm">Closing: {formatCurrency(data.closing)}</Text>
               <Button variant="light" size="xs" onClick={() => ledgerQuery.refetch()}>
                 Refresh
               </Button>
@@ -148,6 +147,9 @@ export function LedgerPage({ departmentKey }: LedgerPageProps) {
                     { name: "current", color: "blue.6", label: "Current Month" },
                     { name: "previous", color: "gray.5", label: "Previous Month" }
                   ]}
+                  yAxisProps={{
+                    width: getYAxisWidth(data.department_breakdown.flatMap(d => [d.current, d.previous]))
+                  }}
                   tickLine="xy"
                   gridAxis="xy"
                   tooltipAnimationDuration={200}
@@ -211,8 +213,8 @@ export function LedgerPage({ departmentKey }: LedgerPageProps) {
               {data.running_balance.map((row, idx) => (
                 <Table.Tr key={`${row.date}-${idx}`}>
                   <Table.Td>{dayjs(row.date).format("YYYY-MM-DD")}</Table.Td>
-                  <Table.Td>{row.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Table.Td>
-                  <Table.Td>{row.running_balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Table.Td>
+                  <Table.Td>{formatCurrency(row.amount)}</Table.Td>
+                  <Table.Td>{formatCurrency(row.running_balance)}</Table.Td>
                   <Table.Td>{row.description || ""}</Table.Td>
                 </Table.Tr>
               ))}

@@ -7,6 +7,7 @@ import { DateRangePicker } from "../components/DateRangePicker";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
 import { StatGrid } from "../components/StatGrid";
+import { formatCurrency } from "../utils/chartHelpers";
 
 interface SalesPageProps {
   departmentKey?: string | null;
@@ -82,7 +83,7 @@ export function SalesPage({ departmentKey }: SalesPageProps) {
       <Group justify="space-between" align="center">
         <div>
           <Text fw={700} fz="xl">
-            Sales Analysis
+            Sales Analysis (in Lakhs)
           </Text>
           <Text c="dimmed" size="sm">
             File {data.meta.file_name} · Sheet {data.meta.sheet}
@@ -96,9 +97,9 @@ export function SalesPage({ departmentKey }: SalesPageProps) {
 
       <StatGrid
         items={[
-          { label: "Total Sales", value: data.totals.total_sales.toLocaleString(undefined, { maximumFractionDigits: 2 }) },
+          { label: "Total Sales", value: formatCurrency(data.totals.total_sales) },
           { label: "Unique Customers", value: data.totals.unique_customers.toLocaleString() },
-          { label: "Average Ticket", value: data.totals.avg_ticket.toLocaleString(undefined, { maximumFractionDigits: 2 }) }
+          { label: "Average Ticket", value: formatCurrency(data.totals.avg_ticket) }
         ]}
       />
 
