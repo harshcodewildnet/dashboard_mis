@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+const API_URL = 'http://3.88.55.152:8000';
 
 export interface User {
     email: string;
