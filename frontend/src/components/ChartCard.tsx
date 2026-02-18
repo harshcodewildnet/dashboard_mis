@@ -19,3 +19,4 @@ export function ChartCard({ title, option, height = 320, style }: ChartCardProps
     </Paper>
   );
 }
+

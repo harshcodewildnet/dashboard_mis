@@ -3,10 +3,14 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import pandas as pd
 from openpyxl import load_workbook
+import boto3
+import io
+import os
+from botocore.exceptions import NoCredentialsError
 
 # Column aliases to resolve inconsistent headings
 COLUMN_MAPPING: Dict[str, List[str]] = {
@@ -197,8 +201,9 @@ def _coerce_types(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _pick_sheet(workbook_path: Path, default_sheet: str, fallbacks: Iterable[str]) -> str:
-    wb = load_workbook(workbook_path, read_only=True)
+def _pick_sheet(workbook_source, default_sheet: str, fallbacks: Iterable[str]) -> str:
+    """workbook_source can be a Path or a file-like object (BytesIO)."""
+    wb = load_workbook(workbook_source, read_only=True)
     if default_sheet in wb.sheetnames:
         return default_sheet
     for name in fallbacks:
@@ -221,26 +226,87 @@ def discover_latest_file(directory: Path, pattern: str) -> Path:
     return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
+def discover_latest_s3_file(bucket: str, prefix: str, pattern: str) -> Tuple[str, datetime]:
+    """Find the latest file in S3 bucket/prefix matching regex pattern."""
+    s3 = boto3.client('s3')
+    try:
+        response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+        if 'Contents' not in response:
+            raise ExcelLoadError(f"No files found in S3 bucket '{bucket}' with prefix '{prefix}'")
+        
+        # Filter by pattern (simple wildcard to regex support if needed)
+        regex_pattern = pattern.replace("*", ".*")
+        regex = re.compile(regex_pattern, re.IGNORECASE)
+        
+        candidates = []
+        for obj in response['Contents']:
+            key = obj['Key']
+            # Only look at the filename part
+            filename = os.path.basename(key)
+            if regex.match(filename):
+                candidates.append((key, obj['LastModified']))
+        
+        if not candidates:
+            raise ExcelLoadError(f"No files matching pattern '{pattern}' in s3://{bucket}/{prefix}")
+            
+        return max(candidates, key=lambda x: x[1])
+    except NoCredentialsError:
+        raise ExcelLoadError("AWS credentials not found")
+    except Exception as e:
+        raise ExcelLoadError(f"Error accessing S3: {e}")
+
+
 def latest_cache_key(excel_config: Dict[str, object]) -> Tuple[str, float]:
     """Return (path, mtime) for the newest file to drive cache invalidation."""
+    s3_bucket = str(excel_config.get("s3_bucket", ""))
+    if s3_bucket:
+        prefix = str(excel_config.get("s3_prefix", ""))
+        pattern = str(excel_config.get("file_pattern", "*.xlsx"))
+        key, mtime = discover_latest_s3_file(s3_bucket, prefix, pattern)
+        return f"s3://{s3_bucket}/{key}", mtime.timestamp()
+
     smb_share = Path(str(excel_config.get("smb_share", "")))
     pattern = str(excel_config.get("file_pattern", "*.xlsx"))
     latest_path = discover_latest_file(smb_share, pattern)
     return str(latest_path), latest_path.stat().st_mtime
 
 
-def load_excel_at_path(excel_path: Path, excel_config: Dict[str, object]) -> Tuple[pd.DataFrame, Dict[str, object]]:
-    """Load and clean Excel from an explicit path (used with cache key)."""
+def load_excel_at_path(excel_path: Union[Path, str], excel_config: Dict[str, object]) -> Tuple[pd.DataFrame, Dict[str, object]]:
+    """Load and clean Excel from an explicit path (local or S3)."""
     default_sheet = str(excel_config.get("default_sheet", "Transactions"))
     fallbacks = excel_config.get("fallback_sheets", []) or []
     skip_rows = int(excel_config.get("skip_rows", 0))
 
-    if not excel_path.exists():
-        raise ExcelLoadError(f"Excel file not found: {excel_path}")
+    path_str = str(excel_path)
+    is_s3 = path_str.startswith("s3://")
 
-    sheet_name = _pick_sheet(excel_path, default_sheet, fallbacks)
+    if is_s3:
+        # For S3, we need to read the bytes for openpyxl sheet discovery
+        s3 = boto3.client('s3')
+        bucket = path_str.split("/")[2]
+        key = "/".join(path_str.split("/")[3:])
+        try:
+            response = s3.get_object(Bucket=bucket, Key=key)
+            content = response['Body'].read()
+            last_modified = response['LastModified']
+            
+            # Discovery sheet using BytesIO
+            with io.BytesIO(content) as f:
+                sheet_name = _pick_sheet(f, default_sheet, fallbacks)
+            
+            # Read into pandas
+            with io.BytesIO(content) as f:
+                df = pd.read_excel(f, sheet_name=sheet_name, engine="openpyxl", skiprows=skip_rows)
+        except Exception as e:
+            raise ExcelLoadError(f"Error loading S3 file {path_str}: {e}")
+    else:
+        path_obj = Path(path_str)
+        if not path_obj.exists():
+            raise ExcelLoadError(f"Excel file not found: {excel_path}")
+        sheet_name = _pick_sheet(path_obj, default_sheet, fallbacks)
+        df = pd.read_excel(path_obj, sheet_name=sheet_name, engine="openpyxl", skiprows=skip_rows)
+        last_modified = datetime.fromtimestamp(path_obj.stat().st_mtime)
 
-    df = pd.read_excel(excel_path, sheet_name=sheet_name, engine="openpyxl", skiprows=skip_rows)
     df = _normalize_columns(df)
     df, melted = _maybe_melt_monthly(df)
     df = _resolve_columns(df)
@@ -248,11 +314,11 @@ def load_excel_at_path(excel_path: Path, excel_config: Dict[str, object]) -> Tup
     df = df.sort_values("date")
 
     metadata = {
-        "file_path": str(excel_path),
+        "file_path": path_str,
         "sheet": sheet_name,
         "rows": int(len(df)),
         "columns": list(df.columns),
-        "modified_at": datetime.fromtimestamp(excel_path.stat().st_mtime),
+        "modified_at": last_modified,
     }
     return df, metadata
 

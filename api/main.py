@@ -81,7 +81,8 @@ class DataCache:
 
     def get_bundle(self) -> DataBundle:
         path_str, mtime = latest_cache_key(self.config["excel_loader"])
-        excel_path = Path(path_str)
+        # If it's not S3, convert to Path for consistency, otherwise keep as string
+        excel_path = path_str if path_str.startswith("s3://") else Path(path_str)
         with self._lock:
             if self._bundle and self._bundle.mtime == mtime:
                 return self._bundle
@@ -354,7 +355,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

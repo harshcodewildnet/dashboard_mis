@@ -23,7 +23,7 @@ def get_data(cache_key: tuple[str, float]):
     """Cache by (path, mtime) so updates invalidate automatically."""
     config = get_config()
     path_str, _ = cache_key
-    return load_excel_at_path(Path(path_str), config["excel_loader"])
+    return load_excel_at_path(path_str, config["excel_loader"])
 
 
 def main():
