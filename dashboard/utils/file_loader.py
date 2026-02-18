@@ -10,6 +10,7 @@ from openpyxl import load_workbook
 import boto3
 import io
 import os
+import requests
 from botocore.exceptions import NoCredentialsError
 
 # Column aliases to resolve inconsistent headings
@@ -228,20 +229,19 @@ def discover_latest_file(directory: Path, pattern: str) -> Path:
 
 def discover_latest_s3_file(bucket: str, prefix: str, pattern: str) -> Tuple[str, datetime]:
     """Find the latest file in S3 bucket/prefix matching regex pattern."""
-    s3 = boto3.client('s3')
+    # First try with credentials (boto3)
     try:
+        s3 = boto3.client('s3')
         response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
         if 'Contents' not in response:
             raise ExcelLoadError(f"No files found in S3 bucket '{bucket}' with prefix '{prefix}'")
         
-        # Filter by pattern (simple wildcard to regex support if needed)
         regex_pattern = pattern.replace("*", ".*")
         regex = re.compile(regex_pattern, re.IGNORECASE)
         
         candidates = []
         for obj in response['Contents']:
             key = obj['Key']
-            # Only look at the filename part
             filename = os.path.basename(key)
             if regex.match(filename):
                 candidates.append((key, obj['LastModified']))
@@ -251,7 +251,24 @@ def discover_latest_s3_file(bucket: str, prefix: str, pattern: str) -> Tuple[str
             
         return max(candidates, key=lambda x: x[1])
     except NoCredentialsError:
-        raise ExcelLoadError("AWS credentials not found")
+        # Fall back to public HTTPS listing - use known filename directly
+        # Since bucket is public, try to find the file via public URL pattern
+        regex_pattern = pattern.replace("*", ".*")
+        regex = re.compile(regex_pattern, re.IGNORECASE)
+        # Try common filenames that match the pattern
+        region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        common_names = ["MIS_Report.xlsx", "mis_report.xlsx", "report.xlsx"]
+        for name in common_names:
+            if regex.match(name):
+                key = f"{prefix}{name}" if prefix else name
+                url = f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
+                resp = requests.head(url, timeout=10)
+                if resp.status_code == 200:
+                    last_modified = datetime.now()
+                    return key, last_modified
+        raise ExcelLoadError(f"No public files matching pattern '{pattern}' in s3://{bucket}/{prefix}")
+    except ExcelLoadError:
+        raise
     except Exception as e:
         raise ExcelLoadError(f"Error accessing S3: {e}")
 
@@ -281,15 +298,32 @@ def load_excel_at_path(excel_path: Union[Path, str], excel_config: Dict[str, obj
     is_s3 = path_str.startswith("s3://")
 
     if is_s3:
-        # For S3, we need to read the bytes for openpyxl sheet discovery
-        s3 = boto3.client('s3')
         bucket = path_str.split("/")[2]
         key = "/".join(path_str.split("/")[3:])
+        content = None
+        last_modified = datetime.now()
+        # Try boto3 first (with credentials)
         try:
+            s3 = boto3.client('s3')
             response = s3.get_object(Bucket=bucket, Key=key)
             content = response['Body'].read()
             last_modified = response['LastModified']
-            
+        except NoCredentialsError:
+            # Fall back to public HTTPS download
+            region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+            url = f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
+            try:
+                resp = requests.get(url, timeout=30)
+                if resp.status_code == 200:
+                    content = resp.content
+                else:
+                    raise ExcelLoadError(f"Failed to download public S3 file: HTTP {resp.status_code} from {url}")
+            except requests.RequestException as e:
+                raise ExcelLoadError(f"Failed to download public S3 file: {e}")
+        except Exception as e:
+            raise ExcelLoadError(f"Error loading S3 file {path_str}: {e}")
+        
+        try:
             # Discovery sheet using BytesIO
             with io.BytesIO(content) as f:
                 sheet_name = _pick_sheet(f, default_sheet, fallbacks)
@@ -297,8 +331,10 @@ def load_excel_at_path(excel_path: Union[Path, str], excel_config: Dict[str, obj
             # Read into pandas
             with io.BytesIO(content) as f:
                 df = pd.read_excel(f, sheet_name=sheet_name, engine="openpyxl", skiprows=skip_rows)
+        except ExcelLoadError:
+            raise
         except Exception as e:
-            raise ExcelLoadError(f"Error loading S3 file {path_str}: {e}")
+            raise ExcelLoadError(f"Error parsing S3 file {path_str}: {e}")
     else:
         path_obj = Path(path_str)
         if not path_obj.exists():
