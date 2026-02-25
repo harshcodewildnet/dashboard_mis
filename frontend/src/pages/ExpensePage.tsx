@@ -1,8 +1,6 @@
-import { ActionIcon, Anchor, Badge, Box, Group, Paper, ScrollArea, Stack, Table, Text, Title } from "@mantine/core";
+import { Box, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { BarChart } from "@mantine/charts";
-import { IconArrowDown, IconArrowUp, IconArrowsSort } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useMemo } from "react";
 import { useExpense, useExpenseHierarchy } from "../api/hooks";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
@@ -15,19 +13,10 @@ interface ExpensePageProps {
 
 export function ExpensePage({ departmentKey }: ExpensePageProps) {
   const query = useExpense(departmentKey);
-  const hierarchyQuery = useExpenseHierarchy(departmentKey);
-  const [sortBy, setSortBy] = useState<"amount" | "variance" | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-
+  const hierarchyQuery = useExpenseHierarchy();
   const items = useMemo(() => {
-    const rawItems = query.data?.items || [];
-    if (!sortBy) return rawItems;
-    return [...rawItems].sort((a, b) => {
-      const aVal = sortBy === "amount" ? a.current_amount : a.variance_pct;
-      const bVal = sortBy === "amount" ? b.current_amount : b.variance_pct;
-      return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
-    });
-  }, [query.data?.items, sortBy, sortDirection]);
+    return query.data?.items || [];
+  }, [query.data?.items]);
 
   if (query.isLoading) return <LoadingState message="Loading expense details" />;
   if (query.isError) return <ErrorState message={(query.error as Error).message} onRetry={() => query.refetch()} />;
@@ -43,19 +32,6 @@ export function ExpensePage({ departmentKey }: ExpensePageProps) {
     return "gray";
   };
 
-  const handleSort = (column: "amount" | "variance") => {
-    if (sortBy === column) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(column);
-      setSortDirection("desc");
-    }
-  };
-
-  const getSortIcon = (column: "amount" | "variance") => {
-    if (sortBy !== column) return <IconArrowsSort size={14} />;
-    return sortDirection === "asc" ? <IconArrowUp size={14} /> : <IconArrowDown size={14} />;
-  };
 
 
 
@@ -89,89 +65,11 @@ export function ExpensePage({ departmentKey }: ExpensePageProps) {
       {/* Hierarchical Expense Table */}
       <Paper p="md" radius="md" withBorder>
         <HierarchicalExpenseTable
-          data={hierarchyQuery.data?.hierarchy || []}
+          data={hierarchyQuery.data}
           isLoading={hierarchyQuery.isLoading}
         />
       </Paper>
 
-      {/* Table */}
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
-          <div>
-            <Title order={3}>📊 Expense Breakdown by Ledger</Title>
-            <Text size="sm" c="dimmed">Comparison with previous month</Text>
-          </div>
-
-          <ScrollArea>
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Header</Table.Th>
-                  <Table.Th style={{ textAlign: "right" }}>
-                    <Group gap="xs" justify="flex-end">
-                      Amount
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        onClick={() => handleSort("amount")}
-                      >
-                        {getSortIcon("amount")}
-                      </ActionIcon>
-                    </Group>
-                  </Table.Th>
-                  <Table.Th style={{ textAlign: "right" }}>
-                    <Group gap="xs" justify="flex-end">
-                      Variance %
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        onClick={() => handleSort("variance")}
-                      >
-                        {getSortIcon("variance")}
-                      </ActionIcon>
-                    </Group>
-                  </Table.Th>
-                  <Table.Th style={{ textAlign: "right" }}>Previous Month</Table.Th>
-                  <Table.Th style={{ textAlign: "right" }}>2 Months Ago</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {items.map((item, index) => (
-                  <Table.Tr key={index}>
-                    <Table.Td>
-                      <Anchor
-                        component={Link}
-                        to={`/ledger?name=${encodeURIComponent(item.ledger)}`}
-                        underline="never"
-                        c="inherit"
-                        style={{ cursor: "pointer" }}
-                      >
-                        {item.ledger}
-                      </Anchor>
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: "right", fontWeight: 600 }}>
-                      {formatCurrency(item.current_amount)}
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: "right" }}>
-                      <Badge color={getVarianceColor(item.variance_pct)} variant="light">
-                        {formatVariance(item.variance_pct)}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: "right" }}>
-                      {formatCurrency(item.previous_amount)}
-                    </Table.Td>
-                    <Table.Td style={{ textAlign: "right" }}>
-                      {formatCurrency(item.two_months_ago_amount)}
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </ScrollArea>
-        </Stack>
-      </Paper>
 
       {/* Chart */}
       <Paper p="md" radius="md" withBorder>

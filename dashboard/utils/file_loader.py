@@ -43,10 +43,12 @@ COLUMN_MAPPING: Dict[str, List[str]] = {
     "quantity": ["quantity", "qty", "units"],
     "item": ["item", "product", "item_name", "stock_item"],
     "cost_centre": ["cost_centre", "cost_center", "department", "project"],
-    "cost_centre_parent": ["alloc_parent_template", "cost_centre_parent", "cost_center_parent", "parent_cost_centre", "parent_cost_center"],
+    "alloc_parent_template": ["alloc_parent_template", "alloc parent template"],
+    "cost_centre_parent": ["cost_centre_parent", "cost_center_parent", "parent_cost_centre", "parent_cost_center"],
     "debit": ["debit", "dr", "amount_dr"],
     "credit": ["credit", "cr", "amount_cr"],
     "primary_group": ["primary_group", "primary group", "group", "account_group"],
+    "expense_ledger_group": ["expenses_ledger_group", "expense_ledger_group", "expenses ledger group", "expense ledger group"],
 }
 
 MONTH_MAP = {
@@ -106,10 +108,12 @@ def _resolve_columns(df: pd.DataFrame) -> pd.DataFrame:
         "quantity",
         "item",
         "cost_centre",
+        "alloc_parent_template",
         "cost_centre_parent",
         "debit",
         "credit",
         "primary_group",
+        "expense_ledger_group",
     ]
 
     for key in required + optional:
@@ -274,18 +278,39 @@ def discover_latest_s3_file(bucket: str, prefix: str, pattern: str) -> Tuple[str
 
 
 def latest_cache_key(excel_config: Dict[str, object]) -> Tuple[str, float]:
-    """Return (path, mtime) for the newest file to drive cache invalidation."""
-    s3_bucket = str(excel_config.get("s3_bucket", ""))
+    """Return (path, mtime) for the newest file to drive cache invalidation.
+
+    Priority:
+      1. local_excel_path (explicit file path in config) — always wins, skips S3
+      2. smb_share local directory scan              — if no S3 bucket configured
+      3. S3 bucket                                   — only when s3_bucket is set
+    """
+    # ── Priority 1: explicit local file path (bypasses S3 entirely) ──────────
+    local_excel_path = str(excel_config.get("local_excel_path", "")).strip()
+    if local_excel_path:
+        p = Path(local_excel_path)
+        if p.exists():
+            return str(p), p.stat().st_mtime
+        # File listed but missing — fall through, don't crash yet
+
+    # ── Priority 2: local SMB/filesystem folder scan ──────────────────────────
+    smb_share_raw = str(excel_config.get("smb_share", "")).strip()
+    if smb_share_raw and not smb_share_raw.startswith("s3://"):
+        smb_share = Path(smb_share_raw)
+        if smb_share.is_dir():
+            pattern = str(excel_config.get("file_pattern", "*.xlsx"))
+            latest_path = discover_latest_file(smb_share, pattern)
+            return str(latest_path), latest_path.stat().st_mtime
+
+    # ── Priority 3: S3 bucket ─────────────────────────────────────────────────
+    s3_bucket = str(excel_config.get("s3_bucket", "")).strip()
     if s3_bucket:
         prefix = str(excel_config.get("s3_prefix", ""))
         pattern = str(excel_config.get("file_pattern", "*.xlsx"))
         key, mtime = discover_latest_s3_file(s3_bucket, prefix, pattern)
         return f"s3://{s3_bucket}/{key}", mtime.timestamp()
 
-    smb_share = Path(str(excel_config.get("smb_share", "")))
-    pattern = str(excel_config.get("file_pattern", "*.xlsx"))
-    latest_path = discover_latest_file(smb_share, pattern)
-    return str(latest_path), latest_path.stat().st_mtime
+    raise ExcelLoadError("No data source configured: set local_excel_path, smb_share, or s3_bucket in config.json")
 
 
 def load_excel_at_path(excel_path: Union[Path, str], excel_config: Dict[str, object]) -> Tuple[pd.DataFrame, Dict[str, object]]:

@@ -1,9 +1,15 @@
 {
   "excel_loader": {
-    "smb_share": "/app/data",
+    "local_excel_path": "./data/MIS_Report_2020-04-01_2025-12-31.xlsx",
+    "smb_share": "./data",
     "file_pattern": "MIS_Report*.xlsx",
     "default_sheet": "Transaction Dump",
-    "fallback_sheets": ["Transactions", "Report", "Data", "Sheet1"],
+    "fallback_sheets": [
+      "Transactions",
+      "Report",
+      "Data",
+      "Sheet1"
+    ],
     "skip_rows": 1
   },
   "dashboard": {

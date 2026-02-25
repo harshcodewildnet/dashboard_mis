@@ -49,14 +49,22 @@ export type LedgerRow = {
   voucher_type?: string | null;
 };
 
+export type LedgerSummaryItem = {
+  ledger: string;
+  months: number[];
+  total: number;
+};
+
 export type LedgerResponse = {
   meta: MetaPayload;
-  ledger: string;
+  ledger: string | null;
   opening: number;
   period_total: number;
   closing: number;
   running_balance: LedgerRow[];
   department_breakdown?: DepartmentComparisonItem[];
+  monthly_summary?: LedgerSummaryItem[];
+  month_labels?: string[];
 };
 
 export type RowsResponse = {
@@ -132,6 +140,7 @@ export type MonthlyCostCenterProfit = {
   cost_center: string;
   months: Record<string, number>;
   total: number;
+  children?: MonthlyCostCenterProfit[];
 };
 
 export type ProfitByCostCenterResponse = {
@@ -168,4 +177,27 @@ export type ExpenseNode = {
 
 export type ExpenseHierarchyResponse = {
   hierarchy: ExpenseNode[];
+};
+
+// ── New 3-month Expense Breakdown types ─────────────────────────────────────
+
+export type ExpenseSectionNode = {
+  id: string;
+  label: string;
+  /** [currentMonth, prevMonth, prevPrevMonth] */
+  months: [number, number, number];
+  total: number;
+  sectionType?: string;
+  isSalary?: boolean;
+  empId?: string;
+  /** Accordion children (nested rows) */
+  children?: ExpenseSectionNode[];
+  /** Outsource Vendor pop-up Level-1 data (cost_centre breakdown) */
+  drilldown?: ExpenseSectionNode[];
+};
+
+export type ExpenseBreakdownResponse = {
+  /** Dynamic labels e.g. ["Jan 2026", "Dec 2025", "Nov 2025"] */
+  month_labels: [string, string, string];
+  sections: ExpenseSectionNode[];
 };

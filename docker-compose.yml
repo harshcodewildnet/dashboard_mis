@@ -23,6 +23,7 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/app/data
+      - ./dashboard:/app/dashboard
     environment:
       - PYTHONPATH=/app
       - S3_BUCKET=${S3_BUCKET}
@@ -38,6 +39,8 @@ services:
       dockerfile: frontend/Dockerfile
     ports:
       - "4173:80"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     environment:
       - VITE_API_BASE=/api
     depends_on:

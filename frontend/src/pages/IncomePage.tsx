@@ -1,16 +1,100 @@
 import { ActionIcon, Anchor, Badge, Box, Group, Paper, ScrollArea, SegmentedControl, Stack, Table, Text, Title } from "@mantine/core";
 import { BarChart } from "@mantine/charts";
-import { IconArrowDown, IconArrowUp, IconArrowsSort } from "@tabler/icons-react";
+import { IconArrowDown, IconArrowUp, IconArrowsSort, IconChevronDown, IconChevronRight } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useIncome, useProfitByCostCenter, useProfitByClient } from "../api/hooks";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
 import { getYAxisWidth, formatCurrency } from "../utils/chartHelpers";
+import { MonthlyCostCenterProfit } from "../api/types";
+import { FloatingPopup, LedgerPopupContent } from "../components/LedgerDrilldownPopup";
 
 interface IncomePageProps {
   departmentKey?: string | null;
 }
+
+const RevenueRow = ({
+  node,
+  level,
+  monthLabels,
+  onOpenLedger
+}: {
+  node: MonthlyCostCenterProfit;
+  level: number;
+  monthLabels: string[];
+  onOpenLedger: (name: string) => void;
+}) => {
+  const [opened, setOpened] = useState(false);
+  const hasChildren = (node.children?.length ?? 0) > 0;
+
+  const handleClick = () => {
+    if (hasChildren) {
+      setOpened(!opened);
+    } else {
+      onOpenLedger(node.cost_center);
+    }
+  };
+
+  return (
+    <>
+      <Table.Tr
+        onClick={handleClick}
+        style={{ cursor: "pointer", backgroundColor: level === 0 ? "#f8f9fa" : "transparent" }}
+      >
+        <Table.Td
+          style={{
+            position: "sticky",
+            left: 0,
+            background: level === 0 ? "#f8f9fa" : "white",
+            zIndex: 1,
+            fontWeight: level === 0 ? 600 : 400,
+            paddingLeft: level * 24 + 12
+          }}
+        >
+          <Group gap={6} wrap="nowrap">
+            {hasChildren ? (
+              opened ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />
+            ) : (
+              <Box w={14} />
+            )}
+            <Text size="sm" fw={level === 0 ? 600 : 400}>{node.cost_center}</Text>
+          </Group>
+        </Table.Td>
+        {monthLabels.map((month) => (
+          <Table.Td
+            key={month}
+            style={{
+              textAlign: "right",
+              fontWeight: node.months[month] !== 0 ? (level === 0 ? 700 : 600) : 400,
+              color: node.months[month] > 0 ? "inherit" : "#adb5bd"
+            }}
+          >
+            {formatCurrency(node.months[month])}
+          </Table.Td>
+        ))}
+        <Table.Td
+          style={{
+            textAlign: "right",
+            fontWeight: "bold",
+            color: node.total > 0 ? "inherit" : "#adb5bd"
+          }}
+        >
+          {formatCurrency(node.total)}
+        </Table.Td>
+      </Table.Tr>
+      {opened && hasChildren && node.children?.map((child, idx) => (
+        <RevenueRow
+          key={idx}
+          node={child}
+          level={level + 1}
+          monthLabels={monthLabels}
+          onOpenLedger={onOpenLedger}
+        />
+      ))}
+    </>
+  );
+};
 
 export function IncomePage({ departmentKey }: IncomePageProps) {
   const query = useIncome(departmentKey);
@@ -20,6 +104,14 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
   const profitByClientQuery = useProfitByClient(departmentKey, 20, clientSort, clientSortBy);
   const [sortBy, setSortBy] = useState<"amount" | "variance" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [selectedCostCenter, setSelectedCostCenter] = useState<string | null>(null);
+
+  const handleOpenLedger = (name: string) => {
+    setSelectedCostCenter(name);
+    setPopupOpen(true);
+  };
 
   const handleClientSort = (column: "total" | "deviation") => {
     if (clientSortBy === column) {
@@ -60,16 +152,10 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
     return "gray";
   };
 
-  const getProfitColor = (profit: number): string => {
-    if (profit > 0) return "#d4edda";
-    if (profit < 0) return "#f8d7da";
-    return "transparent";
-  };
+  const getRevenueColor = (_val: number): string => "transparent";
 
-  const getProfitTextColor = (profit: number): string => {
-    if (profit > 0) return "#155724";
-    if (profit < 0) return "#721c24";
-    return "inherit";
+  const getRevenueTextColor = (val: number): string => {
+    return val > 0 ? "inherit" : "#adb5bd"; // dimmed gray for zeros
   };
 
   const handleSort = (column: "amount" | "variance") => {
@@ -116,9 +202,21 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
       {/* Monthly Profit by Cost Center Matrix */}
       <Paper p="md" radius="md" withBorder>
         <Stack gap="md">
+          {/* Draggable / resizable popup */}
+          {popupOpen && selectedCostCenter && (
+            <FloatingPopup
+              title={`Cost Center: ${selectedCostCenter}`}
+              onClose={() => setPopupOpen(false)}
+            >
+              <LedgerPopupContent
+                costCenter={selectedCostCenter}
+              />
+            </FloatingPopup>
+          )}
+
           <div>
-            <Title order={3}>📊 Monthly Profit by Cost Center</Title>
-            <Text size="sm" c="dimmed">Profit breakdown for current year</Text>
+            <Title order={3}>📊 Monthly Revenue by Cost Center</Title>
+            <Text size="sm" c="dimmed">Revenue breakdown for current year</Text>
           </div>
 
           {profitMatrixQuery.isLoading ? (
@@ -141,45 +239,13 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
                 </Table.Thead>
                 <Table.Tbody>
                   {profitMatrixQuery.data.matrix.map((row, rowIdx) => (
-                    <Table.Tr key={rowIdx}>
-                      <Table.Td
-                        style={{
-                          position: "sticky",
-                          left: 0,
-                          background: "white",
-                          zIndex: 1,
-                          fontWeight: 500
-                        }}
-                      >
-                        {row.cost_center}
-                      </Table.Td>
-                      {Object.keys(row.months).sort().map((month, monthIdx) => {
-                        const profit = row.months[month];
-                        return (
-                          <Table.Td
-                            key={monthIdx}
-                            style={{
-                              textAlign: "right",
-                              backgroundColor: getProfitColor(profit),
-                              color: getProfitTextColor(profit),
-                              fontWeight: profit !== 0 ? 600 : 400
-                            }}
-                          >
-                            {formatCurrency(profit)}
-                          </Table.Td>
-                        );
-                      })}
-                      <Table.Td
-                        style={{
-                          textAlign: "right",
-                          fontWeight: "bold",
-                          backgroundColor: getProfitColor(row.total),
-                          color: getProfitTextColor(row.total)
-                        }}
-                      >
-                        {formatCurrency(row.total)}
-                      </Table.Td>
-                    </Table.Tr>
+                    <RevenueRow
+                      key={rowIdx}
+                      node={row}
+                      level={0}
+                      monthLabels={profitMatrixQuery.data?.month_labels || []}
+                      onOpenLedger={handleOpenLedger}
+                    />
                   ))}
 
                   {/* Total Row */}
@@ -194,8 +260,8 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
                           key={idx}
                           style={{
                             textAlign: "right",
-                            backgroundColor: getProfitColor(total),
-                            color: getProfitTextColor(total)
+                            backgroundColor: getRevenueColor(total),
+                            color: getRevenueTextColor(total)
                           }}
                         >
                           {formatCurrency(total)}
@@ -212,7 +278,7 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
               </Table>
             </ScrollArea>
           ) : (
-            <Text c="dimmed" ta="center" py="xl">No profit data available</Text>
+            <Text c="dimmed" ta="center" py="xl">No revenue data available</Text>
           )}
         </Stack>
       </Paper>
@@ -222,20 +288,20 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
         <Stack gap="md">
           <Group justify="space-between" align="center">
             <div>
-              <Title order={3}>📊 Monthly Profit by Client</Title>
+              <Title order={3}>📊 Monthly Revenue by Client</Title>
               <Text size="sm" c="dimmed">
-                Top 20 clients by {clientSort === "desc" ? "Profit" : "Loss"}. (Profit = Revenue - Expense).
+                Top 20 clients by revenue.
               </Text>
             </div>
             <SegmentedControl
-              value={clientSortBy === "total" ? clientSort : null}
+              value={clientSortBy === "total" ? clientSort : undefined}
               onChange={(value) => {
                 setClientSortBy("total");
                 setClientSort(value as "asc" | "desc");
               }}
               data={[
-                { label: 'Highest Profit', value: 'desc' },
-                { label: 'Biggest Loss', value: 'asc' },
+                { label: 'Highest Revenue', value: 'desc' },
+                { label: 'Lowest Revenue', value: 'asc' },
               ]}
             />
           </Group>
@@ -288,8 +354,8 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
                             key={month}
                             style={{
                               textAlign: "right",
-                              backgroundColor: getProfitColor(profit),
-                              color: getProfitTextColor(profit)
+                              backgroundColor: getRevenueColor(profit),
+                              color: getRevenueTextColor(profit)
                             }}
                           >
                             {formatCurrency(profit)}
@@ -313,8 +379,8 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
                           key={idx}
                           style={{
                             textAlign: "right",
-                            backgroundColor: getProfitColor(total),
-                            color: getProfitTextColor(total)
+                            backgroundColor: getRevenueColor(total),
+                            color: getRevenueTextColor(total)
                           }}
                         >
                           {formatCurrency(total)}
@@ -326,7 +392,7 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
               </Table>
             </ScrollArea>
           ) : (
-            <Text c="dimmed" ta="center" py="xl">No client profit data available</Text>
+            <Text c="dimmed" ta="center" py="xl">No client revenue data available</Text>
           )}
         </Stack>
       </Paper>

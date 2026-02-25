@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const baseURL = "http://3.88.55.152:8000";
+// Use VITE_API_BASE env var if set, otherwise empty string (routes through Vite proxy)
+const baseURL = import.meta.env.VITE_API_BASE || "";
 
 export const api = axios.create({
   baseURL,

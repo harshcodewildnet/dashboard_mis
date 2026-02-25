@@ -31,6 +31,8 @@ from dashboard.utils.metrics import (
     top_ledgers,
     get_monthly_profit_by_client,
     get_hierarchical_expenses,
+    get_hierarchical_expenses_v2,
+    get_ledger_monthly_summary,
 )
 
 # Auth Imports
@@ -79,9 +81,40 @@ class DataCache:
         self._bundle: Optional[DataBundle] = None
         self._lock = Lock()
 
+    def _resolve_path(self):
+        """Return (path_str, mtime) – checks config.json's local_excel_path first."""
+        # Use the standard load_config helper to pick up live changes and resolve paths
+        try:
+            _live_cfg = load_config(CONFIG_PATH)
+            excel_cfg = _live_cfg.get("excel_loader", {})
+        except Exception:
+            excel_cfg = self.config.get("excel_loader", {})
+
+        # 1. Explicit local path in config.json takes top priority
+        local_excel_path = excel_cfg.get("local_excel_path", "").strip()
+        if local_excel_path:
+            p = Path(local_excel_path)
+            if p.exists():
+                return str(p), p.stat().st_mtime
+            # Path doesn't exist – fall through to smb_share scan
+
+        # 2. smb_share local folder scan (skip if it looks like an S3 path)
+        smb = excel_cfg.get("smb_share", "")
+        if smb and not smb.startswith("s3://"):
+            data_dir = Path(smb)
+            if data_dir.is_dir():
+                pattern = excel_cfg.get("file_pattern", "MIS_Report*.xlsx")
+                matches = sorted(data_dir.glob(pattern),
+                                 key=lambda p: p.stat().st_mtime, reverse=True)
+                if matches:
+                    p = matches[0]
+                    return str(p), p.stat().st_mtime
+
+        # 3. Fallback to original (S3 or whatever the startup config had)
+        return latest_cache_key(excel_cfg)
+
     def get_bundle(self) -> DataBundle:
-        path_str, mtime = latest_cache_key(self.config["excel_loader"])
-        # If it's not S3, convert to Path for consistency, otherwise keep as string
+        path_str, mtime = self._resolve_path()
         excel_path = path_str if path_str.startswith("s3://") else Path(path_str)
         with self._lock:
             if self._bundle and self._bundle.mtime == mtime:
@@ -209,14 +242,22 @@ class DepartmentComparisonItem(BaseModel):
     variance: float
 
 
+class LedgerSummaryItem(BaseModel):
+    ledger: str
+    months: List[float]
+    total: float
+
+
 class LedgerResponse(BaseModel):
     meta: MetaPayload
-    ledger: str
+    ledger: Optional[str] = None
     opening: float
     period_total: float
     closing: float
     running_balance: List[LedgerRow]
     department_breakdown: Optional[List[DepartmentComparisonItem]] = None
+    monthly_summary: Optional[List[LedgerSummaryItem]] = None
+    month_labels: Optional[List[str]] = None
 
 
 class RowsResponse(BaseModel):
@@ -292,6 +333,9 @@ class MonthlyCostCenterProfit(BaseModel):
     cost_center: str
     months: Dict[str, float]
     total: float
+    children: Optional[List["MonthlyCostCenterProfit"]] = None
+
+MonthlyCostCenterProfit.model_rebuild()
 
 
 class ProfitByCostCenterResponse(BaseModel):
@@ -540,12 +584,16 @@ def sales(
 
 @app.get("/api/ledger", response_model=LedgerResponse)
 def ledger(
-    name: str = Query(..., description="Ledger name"),
+    name: Optional[str] = Query(None, description="Ledger name"),
+    cost_center: Optional[str] = Query(None, description="Filter by cost center"),
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
     department_key: Optional[str] = Query(None, description="Filter by department (Admin only)"),
     current_user: UserData = Depends(get_current_user),
 ):
+    if not name and not cost_center:
+        raise HTTPException(status_code=400, detail="Either ledger name or cost_center must be provided")
+
     try:
         bundle = data_cache.get_bundle()
     except ExcelLoadError as exc:
@@ -554,16 +602,20 @@ def ledger(
     # Apply RBAC with optional admin filter
     df = _apply_rbac(bundle.df, current_user, department_key)
     
-    if "ledger" not in df.columns:
-        raise HTTPException(status_code=400, detail="Ledger column missing in data")
+    if name and "ledger" in df.columns:
+        if name not in df["ledger"].unique():
+            raise HTTPException(status_code=404, detail=f"Ledger not found: {name}")
 
-    if name not in df["ledger"].unique():
-        raise HTTPException(status_code=404, detail=f"Ledger not found: {name}")
+    if cost_center and "cost_centre" in df.columns:
+        if cost_center not in df["cost_centre"].unique():
+             raise HTTPException(status_code=404, detail=f"Cost Center not found: {cost_center}")
 
     start_ts = pd.Timestamp(start) if start else df["date"].min()
     end_ts = pd.Timestamp(end) if end else df["date"].max()
 
-    opening, period_total, closing, statement = ledger_statement(df, name, start_ts, end_ts)
+    opening, period_total, closing, statement = ledger_statement(
+        df, name, start_ts, end_ts, cost_center=cost_center
+    )
     rows = []
     if not statement.empty:
         for rec in statement.to_dict(orient="records"):
@@ -581,8 +633,13 @@ def ledger(
     # Calculate department breakdown if in Global View (no department_key)
     department_breakdown = None
     if department_key is None and "cost_centre_parent" in df.columns:
-        # Filter for this ledger only
-        ledger_df = df[df["ledger"] == name]
+        # Filter for this ledger or cost center
+        if name:
+            ledger_df = df[df["ledger"] == name]
+        elif cost_center:
+            ledger_df = df[df["cost_centre"] == cost_center]
+        else:
+            ledger_df = pd.DataFrame()
         
                 # Determine Current and Previous Month
         if not ledger_df.empty:
@@ -635,14 +692,24 @@ def ledger(
             breakdown_list.sort(key=lambda x: x["current"], reverse=True)
             department_breakdown = breakdown_list
 
+    # Calculate 6-month monthly summary (by ledger name or cost center)
+    monthly_summary = None
+    month_labels = None
+    if name:
+        monthly_summary, month_labels = get_ledger_monthly_summary(df, ledger_name=name, n_months=6)
+    elif cost_center:
+        monthly_summary, month_labels = get_ledger_monthly_summary(df, cost_center=cost_center, n_months=6)
+
     return LedgerResponse(
         meta=_meta_from_dict(bundle.meta),
-        ledger=name,
+        ledger=name or cost_center,
         opening=opening,
         period_total=period_total,
         closing=closing,
         running_balance=rows,
         department_breakdown=department_breakdown,
+        monthly_summary=monthly_summary,
+        month_labels=month_labels,
     )
 
 
@@ -976,8 +1043,8 @@ def profit_by_cost_center(
             month_labels=[]
         )
     
-    # Get month columns (exclude cost_centre_parent and total)
-    month_columns = [col for col in pivot_df.columns if col not in ["cost_centre_parent", "total"]]
+    # Get month columns (exclude non-month columns)
+    month_columns = [col for col in pivot_df.columns if col not in ["cost_centre_parent", "cost_centre", "total"]]
     
     # Sort month columns chronologically
     month_columns_sorted = sorted(month_columns)
@@ -985,25 +1052,41 @@ def profit_by_cost_center(
     # Create month labels (e.g., "Jan", "Feb", "Mar")
     month_labels = [pd.Period(str(month)).strftime("%b") for month in month_columns_sorted]
     
-    # Build matrix
+    # Build hierarchical matrix
     matrix = []
-    for _, row in pivot_df.iterrows():
-        cost_center = str(row["cost_centre_parent"])
-        # Use label as key to match frontend expectation
-        months_dict = {}
-        for month in month_columns_sorted:
-            label = pd.Period(str(month)).strftime("%b")
-            months_dict[label] = float(row[month])
+    # Group by parent template
+    for parent_name, parent_group in pivot_df.groupby("cost_centre_parent"):
+        parent_months_dict = {}
+        children = []
         
-        total = float(row["total"]) if "total" in row else sum(months_dict.values())
+        for _, row in parent_group.iterrows():
+            child_cost_center = str(row["cost_centre"])
+            child_months_dict = {}
+            for month in month_columns_sorted:
+                label = pd.Period(str(month)).strftime("%b")
+                val = float(row[month])
+                child_months_dict[label] = val
+                # Accumulate for parent
+                parent_months_dict[label] = parent_months_dict.get(label, 0.0) + val
+                
+            child_total = float(row["total"])
+            
+            children.append(MonthlyCostCenterProfit(
+                cost_center=child_cost_center,
+                months=child_months_dict,
+                total=child_total
+            ))
+            
+        parent_total = sum(parent_months_dict.values())
         
         matrix.append(MonthlyCostCenterProfit(
-            cost_center=cost_center,
-            months=months_dict,
-            total=total
+            cost_center=str(parent_name),
+            months=parent_months_dict,
+            total=parent_total,
+            children=children
         ))
     
-    # Calculate monthly totals (sum of all cost centers for each month)
+    # Calculate monthly totals
     monthly_totals = {}
     for month in month_columns_sorted:
         label = pd.Period(str(month)).strftime("%b")
@@ -1143,26 +1226,25 @@ def profit_by_client(
 def expense_hierarchy(
     current_user: UserData = Depends(get_current_user),
 ):
-    """Returns a hierarchical structure of expenses (Salary & Direct Expenses) for the current year."""
+    """Returns the new 6-section expense breakdown (3-month columns) for the Expense Page."""
     try:
         bundle = data_cache.get_bundle()
-        # Get actual file path for Salary List loading
-        excel_path, _ = latest_cache_key(config["excel_loader"])
+        # Use the path that was actually used to load the data bundle
+        # (avoids re-calling latest_cache_key which could hit S3 from stale config)
+        excel_path = bundle.meta["file_path"]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     is_admin = current_user.role == "ADMIN"
     user_cp = current_user.cost_centre_parent
-    print(f"Hierarchy request for user: {current_user.email}, Role: {current_user.role}, Admin: {is_admin}, CP: {user_cp}")
-    
-    hierarchy = get_hierarchical_expenses(
-        bundle.df, 
-        excel_path, 
+
+    result = get_hierarchical_expenses_v2(
+        bundle.df,
+        excel_path,
         user_cost_centre_parent=user_cp,
         is_admin=is_admin
     )
-    
-    return {"hierarchy": hierarchy}
+    return result
 
 
 @app.get("/healthz")

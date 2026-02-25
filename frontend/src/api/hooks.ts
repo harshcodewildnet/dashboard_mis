@@ -12,7 +12,7 @@ import {
   SalesResponse,
   SummaryResponse,
   ProfitByClientResponse,
-  ExpenseHierarchyResponse
+  ExpenseBreakdownResponse
 } from "./types";
 
 export const useMeta = () =>
@@ -91,11 +91,13 @@ export const useSales = (params: { start?: string; end?: string; top?: number; d
     }
   });
 
-export const useLedger = (params: { name: string; start?: string; end?: string; departmentKey?: string | null }) =>
+export const useLedger = (params: { name?: string; costCenter?: string; start?: string; end?: string; departmentKey?: string | null }) =>
   useQuery({
     queryKey: ["ledger", params],
     queryFn: async () => {
-      const apiParams: Record<string, any> = { name: params.name };
+      const apiParams: Record<string, any> = {};
+      if (params.name) apiParams.name = params.name;
+      if (params.costCenter) apiParams.cost_center = params.costCenter;
       if (params.start) apiParams.start = params.start;
       if (params.end) apiParams.end = params.end;
       if (params.departmentKey) apiParams.department_key = params.departmentKey;
@@ -158,12 +160,11 @@ export const useProfitByClient = (departmentKey?: string | null, limit: number =
     }
   });
 
-export const useExpenseHierarchy = (departmentKey?: string | null) =>
+export const useExpenseHierarchy = () =>
   useQuery({
-    queryKey: ["expense_hierarchy", departmentKey],
+    queryKey: ["expense_hierarchy"],
     queryFn: async () => {
-      const params = departmentKey ? { department_key: departmentKey } : {};
-      const res = await api.get<ExpenseHierarchyResponse>("/api/expenses/hierarchy", { params });
+      const res = await api.get<ExpenseBreakdownResponse>("/api/expenses/hierarchy");
       return res.data;
     }
   });
