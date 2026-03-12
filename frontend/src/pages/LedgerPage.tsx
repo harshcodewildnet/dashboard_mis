@@ -1,5 +1,5 @@
-import { BarChart } from "@mantine/charts";
-import { Button, Grid, Group, Paper, Select, Stack, Table, Text } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Divider, Grid, Group, Paper, Select, Stack, Table, Text, Title, rem } from "@mantine/core";
+import { IconBook, IconTrendingUp, IconTrendingDown, IconBuildingBank, IconReplace, IconChartLine, IconListNumbers, IconInfoCircle } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -9,6 +9,7 @@ import { DateRangePicker } from "../components/DateRangePicker";
 import { ErrorState } from "../components/ErrorState";
 import { LoadingState } from "../components/LoadingState";
 import { getYAxisWidth, formatCurrency } from "../utils/chartHelpers";
+import { BarChart } from "@mantine/charts";
 
 interface LedgerPageProps {
   departmentKey?: string | null;
@@ -87,140 +88,187 @@ export function LedgerPage({ departmentKey }: LedgerPageProps) {
   };
 
   return (
-    <Stack gap="md">
-      <Group justify="space-between" align="center">
-        <div>
-          <Text fw={700} fz="xl">
-            Ledger Explorer
+    <Stack gap="xl">
+      <Group justify="space-between" align="flex-end">
+        <Stack gap={4}>
+          <Text size="sm" fw={600} c="indigo.6" style={{ textTransform: 'uppercase', letterSpacing: rem(1) }}>
+            Account Intelligence
           </Text>
-          <Text c="dimmed" size="sm">
-            {data.meta.file_name}
-          </Text>
-        </div>
-        <Group gap="md">
+          <Title order={1} size="h2" fw={800}>
+            Ledger Explorer <Text span c="dimmed" fw={500} size="lg"> Analytics</Text>
+          </Title>
+        </Stack>
+        <Group gap="md" align="flex-end">
           <Select
-            label="Ledger"
-            data={ledgersQuery.data.map((l) => ({ label: l, value: l }))}
+            label="Select Financial Ledger"
+            data={(ledgersQuery.data || []).map((l) => ({ label: l, value: l }))}
             value={selected}
             onChange={setSelected}
             searchable
-            nothingFoundMessage="No ledger"
-            w={240}
+            nothingFoundMessage="No ledger found"
+            w={280}
+            radius="md"
+            leftSection={<IconBook size={16} />}
           />
           <DateRangePicker value={range} onChange={setRange} />
         </Group>
       </Group>
 
-      <Grid gutter="md">
+      <Grid gutter="lg">
         <Grid.Col span={{ base: 12, md: 4 }}>
-          <Paper withBorder radius="lg" p="md">
-            <Stack gap={8}>
-              <Text fw={600}>Balances (in Lakhs)</Text>
-              <Text size="sm">Opening: {formatCurrency(data.opening)}</Text>
-              <Text size="sm">Movement: {formatCurrency(data.period_total)}</Text>
-              <Text size="sm">Closing: {formatCurrency(data.closing)}</Text>
-              <Button variant="light" size="xs" onClick={() => ledgerQuery.refetch()}>
-                Refresh
-              </Button>
+          <Stack gap="lg" h="100%">
+            <Card radius="lg" p="xl" withBorder shadow="sm" h="100%">
+              <Stack gap="xl">
+                <Group justify="space-between">
+                  <Text fw={700} size="sm">Balance Sheet Summary</Text>
+                  <ActionIcon variant="light" color="indigo" radius="md" onClick={() => ledgerQuery.refetch()}>
+                    <IconReplace size={18} stroke={1.5} />
+                  </ActionIcon>
+                </Group>
+                
+                <Stack gap="md">
+                  <Paper p="md" radius="md" bg="slate.0" withBorder>
+                    <Text size="xs" c="dimmed" fw={700} mb={4} style={{ textTransform: 'uppercase' }}>Opening Position</Text>
+                    <Title order={3} fw={800}>{formatCurrency(data.opening)}</Title>
+                  </Paper>
+
+                  <Paper p="md" radius="md" bg={data.period_total >= 0 ? "green.0" : "red.0"} withBorder style={{ 
+                    borderColor: data.period_total >= 0 ? "var(--mantine-color-green-2)" : "var(--mantine-color-red-2)"
+                  }}>
+                    <Group justify="space-between">
+                      <Text size="xs" c={data.period_total >= 0 ? "green.7" : "red.7"} fw={700} style={{ textTransform: 'uppercase' }}>Period Movement</Text>
+                      {data.period_total >= 0 ? <IconTrendingUp size={14} color="var(--mantine-color-green-6)" /> : <IconTrendingDown size={14} color="var(--mantine-color-red-6)" />}
+                    </Group>
+                    <Title order={3} fw={800} c={data.period_total >= 0 ? "green.8" : "red.8"}>{formatCurrency(data.period_total)}</Title>
+                  </Paper>
+
+                  <Paper p="md" radius="md" bg="indigo.6" variant="filled">
+                    <Text size="xs" c="white" opacity={0.8} fw={700} mb={4} style={{ textTransform: 'uppercase' }}>Final Closing</Text>
+                    <Title order={3} fw={800} c="white">{formatCurrency(data.closing)}</Title>
+                  </Paper>
+                </Stack>
+
+                <Group gap="xs">
+                  <IconInfoCircle size={14} color="var(--mantine-color-dimmed)" />
+                  <Text size="xs" c="dimmed" fw={500}>Aggregated in Lakhs (₹)</Text>
+                </Group>
+              </Stack>
+            </Card>
+          </Stack>
+        </Grid.Col>
+        
+        <Grid.Col span={{ base: 12, md: 8 }}>
+          <Paper p="xl" radius="lg" withBorder shadow="sm" h="100%">
+            <Stack gap="lg">
+              <Group gap="xs">
+                <ActionIcon color="sky" variant="light" radius="md"><IconChartLine size={18} /></ActionIcon>
+                <Title order={3} size="h5" fw={700}>Running Liquidity Trend</Title>
+              </Group>
+              <ChartCard naked title="Trend Analysis" option={balanceOption} height={320} />
             </Stack>
           </Paper>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 8 }}>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 8 }}>
-          <ChartCard title="Running Balance" option={balanceOption} height={320} />
         </Grid.Col>
 
         {data.department_breakdown && (
           <Grid.Col span={12}>
-            <Paper withBorder radius="lg" p="md">
-              <Text fw={600} mb="md">
-                Department Breakdown (Current Month)
-              </Text>
-              <div className="chart-container">
-                <BarChart
-                  h={300}
-                  data={data.department_breakdown}
-                  dataKey="label"
-                  type="default"
-                  series={[
-                    { name: "current", color: "blue.6", label: "Current Month" },
-                    { name: "previous", color: "gray.5", label: "Previous Month" }
-                  ]}
-                  yAxisProps={{
-                    width: getYAxisWidth(data.department_breakdown.flatMap(d => [d.current, d.previous]))
-                  }}
-                  tickLine="xy"
-                  gridAxis="xy"
-                  tooltipAnimationDuration={200}
-                  withTooltip
-                  barProps={{ activeBar: false }}
-                  tooltipProps={{
-                    content: ({ label, payload }) => {
-                      if (!payload || payload.length === 0) return null;
-                      // We expect payload to have data from the item
-                      // payload[0].payload contains the full data object (current, previous, variance)
-                      const item = payload[0].payload;
-
-                      return (
-                        <Paper px="md" py="sm" withBorder shadow="md" radius="md">
-                          <Text fw={600} size="sm" mb={4} style={{ borderBottom: "1px solid #eee", paddingBottom: 4 }}>
-                            {label}
-                          </Text>
-                          <Group justify="space-between" gap="xl" mb={4}>
-                            <Text size="xs" c="dimmed">Current</Text>
-                            <Text size="sm" fw={600} c="blue.7">{formatCurrency(item.current)}</Text>
-                          </Group>
-                          <Group justify="space-between" gap="xl" mb={4}>
-                            <Text size="xs" c="dimmed">Previous</Text>
-                            <Text size="sm" fw={500} c="gray.6">{formatCurrency(item.previous)}</Text>
-                          </Group>
-                          <Group justify="space-between" gap="xl" pt={4} style={{ borderTop: "1px dashed #eee" }}>
-                            <Text size="xs" c="dimmed">Variance</Text>
-                            <Text size="sm" fw={700} c={getVarianceColor(item.variance)}>
-                              {formatVariance(item.variance)}
+            <Paper p="xl" radius="lg" withBorder shadow="sm">
+              <Stack gap="lg">
+                <Group gap="xs">
+                  <ActionIcon color="indigo" variant="light" radius="md"><IconBuildingBank size={18} /></ActionIcon>
+                  <Title order={3} size="h5" fw={700}>Department Allocation Matrix</Title>
+                </Group>
+                <div className="chart-container">
+                  <BarChart
+                    h={300}
+                    data={data.department_breakdown as unknown as Record<string, any>[]}
+                    dataKey="label"
+                    type="default"
+                    series={[
+                      { name: "current", color: "indigo.6", label: "Current Month" },
+                      { name: "previous", color: "slate.3", label: "Previous Month" }
+                    ]}
+                    yAxisProps={{
+                      width: getYAxisWidth(data.department_breakdown.flatMap(d => [d.current, d.previous]))
+                    }}
+                    tickLine="xy"
+                    gridAxis="xy"
+                    tooltipAnimationDuration={200}
+                    withTooltip
+                    barProps={{ activeBar: false, radius: [4, 4, 0, 0] }}
+                    tooltipProps={{
+                      content: ({ label, payload }) => {
+                        if (!payload || payload.length === 0) return null;
+                        const item = payload[0].payload;
+                        return (
+                          <Paper px="md" py="sm" withBorder shadow="xl" radius="lg" style={{ backdropFilter: 'blur(8px)', backgroundColor: 'rgba(255, 255, 255, 0.9)' }}>
+                            <Text fw={800} size="sm" mb={10} color="indigo.7" style={{ borderBottom: "1px solid var(--mantine-color-slate-1)", paddingBottom: 6 }}>
+                              {label}
                             </Text>
-                          </Group>
-                        </Paper>
-                      );
-                    }
-                  }}
-                />
-              </div>
+                            <Stack gap={6}>
+                              <Group justify="space-between" gap="xl">
+                                <Text size="xs" c="dimmed" fw={600}>CURRENT</Text>
+                                <Text size="sm" fw={800} c="indigo.7">{formatCurrency(item.current)}</Text>
+                              </Group>
+                              <Group justify="space-between" gap="xl">
+                                <Text size="xs" c="dimmed" fw={600}>PREVIOUS</Text>
+                                <Text size="sm" fw={600} c="slate.5">{formatCurrency(item.previous)}</Text>
+                              </Group>
+                              <Divider variant="dashed" />
+                              <Group justify="space-between" gap="xl">
+                                <Text size="xs" c="dimmed" fw={600}>VARIANCE</Text>
+                                <Badge size="sm" variant="light" color={getVarianceColor(item.variance)}>
+                                  {formatVariance(item.variance)}
+                                </Badge>
+                              </Group>
+                            </Stack>
+                          </Paper>
+                        );
+                      }
+                    }}
+                  />
+                </div>
+              </Stack>
             </Paper>
           </Grid.Col>
         )}
       </Grid>
 
-      <Paper withBorder radius="lg" p="md">
-        <Group justify="space-between" align="center" mb="sm">
-          <Text fw={600}>Transactions</Text>
-          <Text size="sm" c="dimmed">
-            Showing {data.running_balance.length} rows
-          </Text>
-        </Group>
-        <Table.ScrollContainer minWidth={700}>
-          <Table highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Date</Table.Th>
-                <Table.Th>Amount</Table.Th>
-                <Table.Th>Running</Table.Th>
-                <Table.Th>Description</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {data.running_balance.map((row, idx) => (
-                <Table.Tr key={`${row.date}-${idx}`}>
-                  <Table.Td>{dayjs(row.date).format("YYYY-MM-DD")}</Table.Td>
-                  <Table.Td>{formatCurrency(row.amount)}</Table.Td>
-                  <Table.Td>{formatCurrency(row.running_balance)}</Table.Td>
-                  <Table.Td>{row.description || ""}</Table.Td>
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
+          <Group justify="space-between" align="center">
+            <Group gap="xs">
+              <ActionIcon color="indigo" variant="light" radius="md"><IconListNumbers size={18} /></ActionIcon>
+              <Title order={3} size="h5" fw={700}>Transaction Audit Trail</Title>
+            </Group>
+            <Badge variant="light" color="slate" size="lg" radius="sm">
+              {data.running_balance.length} Records Verified
+            </Badge>
+          </Group>
+          <Table.ScrollContainer minWidth={700}>
+            <Table highlightOnHover verticalSpacing="md">
+              <Table.Thead bg="slate.0">
+                <Table.Tr>
+                  <Table.Th style={{ borderRadius: '8px 0 0 0' }}>DATE</Table.Th>
+                  <Table.Th>TRANS. AMOUNT</Table.Th>
+                  <Table.Th>REMAINING BAL.</Table.Th>
+                  <Table.Th style={{ borderRadius: '0 8px 0 0' }}>DESCRIPTION / NARRATION</Table.Th>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+              </Table.Thead>
+              <Table.Tbody>
+                {data.running_balance.map((row, idx) => (
+                  <Table.Tr key={`${row.date}-${idx}`}>
+                    <Table.Td fw={600} c="indigo.7" style={{ whiteSpace: 'nowrap' }}>{dayjs(row.date).format("DD MMM YYYY")}</Table.Td>
+                    <Table.Td fw={700} c={row.amount >= 0 ? 'green.8' : 'red.8'}>{formatCurrency(row.amount)}</Table.Td>
+                    <Table.Td fw={500} c="dimmed">{formatCurrency(row.running_balance)}</Table.Td>
+                    <Table.Td style={{ maxWidth: 350 }}>
+                      <Text size="xs" fw={500} lineClamp={1}>{row.description || "N/A"}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Stack>
       </Paper>
     </Stack>
   );

@@ -1,4 +1,4 @@
-import { Select } from "@mantine/core";
+import { Select, rem } from "@mantine/core";
 import { IconFilter } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
@@ -56,16 +56,35 @@ export function DepartmentFilter({ value, onChange }: DepartmentFilterProps) {
 
     return (
         <Select
-            placeholder="Filter by department"
+            placeholder="Search Departments..."
             data={options}
             value={value || ""}
             onChange={(val) => onChange(val === "" ? null : val)}
-            leftSection={<IconFilter size={16} />}
+            leftSection={<IconFilter size={16} color="var(--mantine-color-indigo-6)" />}
             disabled={loading}
             clearable
             searchable
-            w={250}
+            w={280}
             size="sm"
+            radius="md"
+            styles={{
+                input: {
+                    borderWidth: rem(1.5),
+                    fontWeight: 600,
+                    backgroundColor: 'var(--mantine-color-white)',
+                },
+                dropdown: {
+                    borderRadius: rem(12),
+                    boxShadow: 'var(--mantine-shadow-lg)',
+                    border: '1px solid var(--mantine-color-slate-2)',
+                },
+                option: {
+                    borderRadius: rem(6),
+                    margin: rem(4),
+                    fontSize: rem(13),
+                    fontWeight: 500,
+                }
+            }}
         />
     );
 }

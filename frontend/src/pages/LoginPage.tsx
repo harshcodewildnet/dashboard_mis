@@ -9,9 +9,12 @@ import {
     Button,
     Alert,
     Center,
-    Box
+    Box,
+    rem,
+    Stack,
+    Group
 } from '@mantine/core';
-import { IconAlertCircle, IconLock } from '@tabler/icons-react';
+import { IconAlertCircle, IconLock, IconUser, IconLayoutDashboard } from '@tabler/icons-react';
 import { auth } from '../auth/auth';
 
 interface LoginPageProps {
@@ -40,51 +43,89 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     };
 
     return (
-        <Container size={420} my={80}>
-            <Title order={1} ta="center" fw={900}>
-                MIS Dashboard
-            </Title>
-            <Text c="dimmed" size="sm" ta="center" mt={5}>
-                Sign in to access your department reports
-            </Text>
+        <Box
+            style={{
+                minHeight: '100vh',
+                background: 'linear-gradient(135deg, var(--mantine-color-slate-0) 0%, var(--mantine-color-indigo-1) 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: rem(20)
+            }}
+        >
+            <Container size={420} w="100%">
+                <Stack align="center" gap="xl" mb={rem(40)}>
+                    <Group gap="md">
+                        <IconLayoutDashboard size={40} color="var(--mantine-color-indigo-6)" />
+                        <Title order={1} fw={900} size={rem(32)} style={{ letterSpacing: '-1px' }}>
+                            MIS <Text span c="indigo.6">CORE</Text>
+                        </Title>
+                    </Group>
+                    <Box ta="center">
+                        <Title order={2} size="h3" fw={700}>Welcome Back</Title>
+                        <Text c="dimmed" size="sm" mt={5}>
+                            Sign in to access your enterprise analytics suite
+                        </Text>
+                    </Box>
+                </Stack>
 
-            <Paper withBorder shadow="md" p={30} mt={30} radius="md">
-                <form onSubmit={handleSubmit}>
-                    {error && (
-                        <Alert icon={<IconAlertCircle size="1rem" />} title="Login Failed" color="red" mb="md">
-                            {error}
-                        </Alert>
-                    )}
+                <Paper withBorder shadow="xl" p={40} radius="lg" style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(10px)' }}>
+                    <form onSubmit={handleSubmit}>
+                        {error && (
+                            <Alert icon={<IconAlertCircle size="1.2rem" />} title="Invalid Credentials" color="red" mb="lg" radius="md" variant="light">
+                                {error}
+                            </Alert>
+                        )}
 
-                    <TextInput
-                        label="Email Address"
-                        placeholder="admin@company.com"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.currentTarget.value)}
-                    />
-                    <PasswordInput
-                        label="Password"
-                        placeholder="Your password"
-                        required
-                        mt="md"
-                        value={password}
-                        onChange={(e) => setPassword(e.currentTarget.value)}
-                    />
+                        <TextInput
+                            label="Corporate Email"
+                            placeholder="name@company.com"
+                            required
+                            size="md"
+                            leftSection={<IconUser size={18} stroke={1.5} />}
+                            value={email}
+                            onChange={(e) => setEmail(e.currentTarget.value)}
+                        />
+                        <PasswordInput
+                            label="Safe Password"
+                            placeholder="••••••••"
+                            required
+                            size="md"
+                            mt="lg"
+                            leftSection={<IconLock size={18} stroke={1.5} />}
+                            value={password}
+                            onChange={(e) => setPassword(e.currentTarget.value)}
+                        />
 
-                    <Button fullWidth mt="xl" type="submit" loading={loading} leftSection={<IconLock size={16} />}>
-                        Sign in
-                    </Button>
-                </form>
-            </Paper>
+                        <Button 
+                            fullWidth 
+                            mt={40} 
+                            size="md" 
+                            type="submit" 
+                            loading={loading}
+                            radius="md"
+                            style={{ 
+                                boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
+                                transition: 'transform 150ms ease'
+                            }}
+                        >
+                            Authorize Access
+                        </Button>
+                    </form>
+                </Paper>
 
-            <Center mt="xl">
-                <Box ta="center">
-                    <Text size="xs" c="dimmed">Test Credentials:</Text>
-                    <Text size="xs" c="dimmed">admin@company.com / admin123</Text>
-                    <Text size="xs" c="dimmed">dm@company.com / dm123</Text>
-                </Box>
-            </Center>
-        </Container>
+                <Stack mt="xl" gap="xs">
+                    <Center>
+                        <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Development Sandbox</Text>
+                    </Center>
+                    <Paper withBorder p="xs" radius="md" bg="slate.0">
+                        <Stack gap={4}>
+                            <Text size="xs" ta="center" fw={500}>admin@company.com / admin123</Text>
+                            <Text size="xs" ta="center" fw={500}>dm@company.com / dm123</Text>
+                        </Stack>
+                    </Paper>
+                </Stack>
+            </Container>
+        </Box>
     );
 }

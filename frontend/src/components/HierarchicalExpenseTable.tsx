@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-    Table, Group, Text, Box, ScrollArea, Badge, Divider, Stack, Loader
+    Table, Group, Text, Box, ScrollArea, Badge, Divider, Stack, Loader, rem
 } from '@mantine/core';
 import { Rnd } from 'react-rnd';
 import {
@@ -21,13 +21,13 @@ interface Props {
 
 // ─── Section color map ────────────────────────────────────────────────────────
 const SECTION_COLORS: Record<string, string> = {
-    direct: '#1971c2',
-    outsource_vendor_root: '#e67700',
-    salary: '#2f9e44',
-    overhead: '#9c36b5',
-    support_salary: '#6741d9',
-    marketing_salary: '#c2255c',
-    marketing_expenses: '#e03131',
+    direct: 'var(--mantine-color-blue-7)',
+    outsource_vendor_root: 'var(--mantine-color-orange-7)',
+    salary: 'var(--mantine-color-green-7)',
+    overhead: 'var(--mantine-color-grape-7)',
+    support_salary: 'var(--mantine-color-indigo-7)',
+    marketing_salary: 'var(--mantine-color-pink-7)',
+    marketing_expenses: 'var(--mantine-color-red-7)',
 };
 
 // ─── Variance badge ───────────────────────────────────────────────────────────
@@ -56,8 +56,8 @@ function AmtCell({ val, bold }: { val: number; bold?: boolean }) {
 
 // ─── Row background per level ─────────────────────────────────────────────────
 function rowBg(level: number): string {
-    if (level === 0) return '#edf2ff';   // light indigo for section headers
-    if (level === 1) return '#f8f9fa';
+    if (level === 0) return 'var(--mantine-color-slate-1)';
+    if (level === 1) return 'var(--mantine-color-slate-0)';
     if (level === 2) return '#ffffff';
     return '#fff';
 }
@@ -103,12 +103,12 @@ const ExpenseRow: React.FC<RowProps> = ({ node, level, monthLabels, onOpenLedger
                 {/* Label cell */}
                 <Table.Td
                     style={{
-                        paddingLeft: level * 18 + 10,
+                        paddingLeft: level * 18 + 12,
                         position: 'sticky', left: 0,
                         background: bg,
                         zIndex: 1,
-                        borderRight: '2px solid #dee2e6',
-                        minWidth: 240,
+                        borderRight: '1px solid var(--mantine-color-slate-2)',
+                        minWidth: rem(260),
                     }}
                 >
                     <Group gap={6} wrap="nowrap">
@@ -217,32 +217,35 @@ export const HierarchicalExpenseTable: React.FC<Props> = ({ data, isLoading }) =
                     <Table.Thead
                         style={{
                             position: 'sticky', top: 0,
-                            background: '#f1f3f5', zIndex: 10,
+                            background: 'var(--mantine-color-slate-1)', zIndex: 10,
                         }}
                     >
                         <Table.Tr>
                             <Table.Th
                                 style={{
                                     position: 'sticky', left: 0,
-                                    background: '#f1f3f5', zIndex: 11,
-                                    borderRight: '2px solid #dee2e6',
-                                    minWidth: 240,
+                                    background: 'var(--mantine-color-slate-1)', zIndex: 11,
+                                    borderRight: '1px solid var(--mantine-color-slate-2)',
+                                    minWidth: rem(260),
+                                    fontSize: rem(12),
+                                    textTransform: 'uppercase',
+                                    color: 'var(--mantine-color-dimmed)'
                                 }}
                             >
-                                Category / Name
+                                Classification
                             </Table.Th>
                             {monthLabels.map((m, i) => (
                                 <Table.Th key={m} style={{ textAlign: 'right', minWidth: 110 }}>
-                                    <Text size="xs" fw={i === 0 ? 700 : 400} c={i === 0 ? 'blue' : 'dimmed'}>
+                                    <Text size="xs" fw={700} c={i === 0 ? 'indigo.6' : 'dimmed'} h={16}>
                                         {m}
                                     </Text>
                                 </Table.Th>
                             ))}
                             <Table.Th style={{ textAlign: 'center', minWidth: 80 }}>
-                                <Text size="xs" c="dimmed">vs Prev</Text>
+                                <Text size="xs" c="dimmed" fw={700} h={16}>Δ %</Text>
                             </Table.Th>
                             <Table.Th style={{ textAlign: 'right', minWidth: 120 }}>
-                                <Text size="xs">3M Total</Text>
+                                <Text size="xs" fw={700} h={16}>QUARTER TOTAL</Text>
                             </Table.Th>
                         </Table.Tr>
                     </Table.Thead>

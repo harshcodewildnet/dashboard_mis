@@ -1,9 +1,6 @@
-import React from 'react';
-import {
-    Table, Group, Text, Box, ScrollArea, Divider, Stack, Loader
-} from '@mantine/core';
+import { ActionIcon, Badge, Box, Divider, Group, Loader, Paper, ScrollArea, Stack, Table, Text, Title, rem } from '@mantine/core';
 import { Rnd } from 'react-rnd';
-import { IconX } from '@tabler/icons-react';
+import { IconX, IconTrendingUp, IconTrendingDown, IconBook, IconListNumbers, IconHistory } from '@tabler/icons-react';
 import { formatCurrency } from '../utils/chartHelpers';
 import { useLedger } from '../api/hooks';
 import dayjs from 'dayjs';
@@ -43,47 +40,48 @@ export function FloatingPopup({ title, onClose, children }: FloatingPopupProps) 
                     bottomLeft: true, bottomRight: true,
                 }}
             >
-                <div style={{
-                    width: '100%', height: '100%',
-                    display: 'flex', flexDirection: 'column',
-                    background: '#fff',
-                    borderRadius: 8,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-                    overflow: 'hidden',
-                    border: '1px solid #dee2e6',
-                }}>
-                    <div
+                <Paper
+                    shadow="xl"
+                    radius="lg"
+                    withBorder
+                    style={{
+                        width: '100%', height: '100%',
+                        display: 'flex', flexDirection: 'column',
+                        overflow: 'hidden',
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(10px)',
+                    }}
+                >
+                    <Group
                         className="popup-drag-handle"
+                        justify="space-between"
+                        px="md"
+                        py="xs"
+                        bg="slate.0"
                         style={{
-                            padding: '10px 14px',
-                            background: '#f1f3f5',
-                            borderBottom: '1px solid #dee2e6',
+                            borderBottom: '1px solid var(--mantine-color-slate-2)',
                             cursor: 'move',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
                             userSelect: 'none',
                             flexShrink: 0,
                         }}
                     >
-                        <Text fw={600} size="sm">{title}</Text>
-                        <div
+                        <Group gap="xs">
+                            <IconBook size={16} color="var(--mantine-color-indigo-6)" />
+                            <Text fw={700} size="sm" c="slate.8">{title}</Text>
+                        </Group>
+                        <ActionIcon 
                             onClick={onClose}
-                            style={{
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                padding: '2px 4px',
-                                borderRadius: 4,
-                            }}
+                            variant="subtle"
+                            color="slate"
+                            radius="md"
                         >
-                            <IconX size={16} />
-                        </div>
-                    </div>
-                    <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px' }}>
+                            <IconX size={18} />
+                        </ActionIcon>
+                    </Group>
+                    <Box style={{ flex: 1, overflow: 'hidden' }} p="md">
                         {children}
-                    </div>
-                </div>
+                    </Box>
+                </Paper>
             </Rnd>
         </div>
     );
@@ -98,89 +96,110 @@ export function LedgerPopupContent({ costCenter, ledgerName }: { costCenter?: st
     if (!data) return <Text c="dimmed" p="md">No data available.</Text>;
 
     return (
-        <Stack gap="md">
-            <Group justify="space-between" p="sm"
-                style={{ background: '#f8f9fa', borderRadius: 6, border: '1px solid #e9ecef' }}>
-                <Box>
-                    <Text size="xs" c="dimmed">{ledgerName ? 'Ledger' : 'Cost Center'}</Text>
-                    <Text fw={700} size="md">{ledgerName || costCenter}</Text>
-                </Box>
-                <Group gap="xl">
-                    {[
-                        { label: 'Opening', val: data.opening },
-                        { label: 'Movement', val: data.period_total },
-                        { label: 'Closing', val: data.closing },
-                    ].map(({ label, val }) => (
-                        <Box key={label} style={{ textAlign: 'right' }}>
-                            <Text size="xs" c="dimmed">{label}</Text>
-                            <Text size="sm" fw={600}>{formatCurrency(val)}</Text>
-                        </Box>
-                    ))}
+        <Stack gap="lg" h="100%">
+            <Paper p="md" bg="indigo.0" radius="md" style={{ border: '1px solid var(--mantine-color-indigo-1)' }}>
+                <Group justify="space-between">
+                    <Box>
+                        <Text size="xs" c="indigo.7" fw={700} style={{ textTransform: 'uppercase' }}>
+                            {ledgerName ? 'Active Financial Ledger' : 'Active Cost Center'}
+                        </Text>
+                        <Title order={4} fw={800}>{ledgerName || costCenter}</Title>
+                    </Box>
+                    <Group gap="lg">
+                        {[
+                            { label: 'Opening', val: data.opening, color: 'slate.7' },
+                            { label: 'Movement', val: data.period_total, color: data.period_total >= 0 ? 'green.7' : 'red.7' },
+                            { label: 'Closing', val: data.closing, color: 'indigo.7' },
+                        ].map(({ label, val, color }) => (
+                            <Box key={label} style={{ textAlign: 'right' }}>
+                                <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>{label}</Text>
+                                <Text size="md" fw={800} c={color}>{formatCurrency(val)}</Text>
+                            </Box>
+                        ))}
+                    </Group>
                 </Group>
-            </Group>
+            </Paper>
 
             {data.monthly_summary && data.monthly_summary.length > 0 && (
                 <Box>
-                    <Text fw={600} size="sm" mb="xs">6-Month Breakdown</Text>
-                    <Table withTableBorder withColumnBorders fz="xs" highlightOnHover>
-                        <Table.Thead style={{ background: '#f1f3f5' }}>
-                            <Table.Tr>
-                                <Table.Th>{ledgerName ? 'Ledger' : 'Ledger Name'}</Table.Th>
-                                {data.month_labels?.map(l => (
-                                    <Table.Th key={l} style={{ textAlign: 'right' }}>{l}</Table.Th>
-                                ))}
-                                <Table.Th style={{ textAlign: 'right' }}>6M Total</Table.Th>
-                            </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                            {data.monthly_summary.map(item => (
-                                <Table.Tr key={item.ledger}>
-                                    <Table.Td fw={500}>{item.ledger}</Table.Td>
-                                    {item.months.map((amt, i) => (
-                                        <Table.Td key={i} style={{ textAlign: 'right' }}>
-                                            <Text size="xs" c={amt !== 0 ? 'inherit' : 'dimmed'}>
-                                                {amt !== 0 ? formatCurrency(amt) : '–'}
-                                            </Text>
-                                        </Table.Td>
+                    <Group gap="xs" mb="sm">
+                        <IconHistory size={16} color="var(--mantine-color-slate-5)" />
+                        <Text fw={700} size="sm" style={{ textTransform: 'uppercase' }}>6-Month Performance Matrix</Text>
+                    </Group>
+                    <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+                        <Table highlightOnHover verticalSpacing="xs">
+                            <Table.Thead bg="slate.0">
+                                <Table.Tr>
+                                    <Table.Th style={{ fontSize: rem(10) }}>ENTITY</Table.Th>
+                                    {data.month_labels?.map(l => (
+                                        <Table.Th key={l} style={{ textAlign: 'right', fontSize: rem(10) }}>{l.toUpperCase()}</Table.Th>
                                     ))}
-                                    <Table.Td style={{ textAlign: 'right' }}>
-                                        <Text fw={600} size="xs">{formatCurrency(item.total)}</Text>
-                                    </Table.Td>
+                                    <Table.Th style={{ textAlign: 'right', fontSize: rem(10) }}>6M VOLUME</Table.Th>
                                 </Table.Tr>
-                            ))}
-                        </Table.Tbody>
-                    </Table>
+                            </Table.Thead>
+                            <Table.Tbody>
+                                {data.monthly_summary.map(item => (
+                                    <Table.Tr key={item.ledger}>
+                                        <Table.Td fw={600} style={{ whiteSpace: 'nowrap' }}>
+                                            <Text size="xs" c="indigo.7" fw={600}>{item.ledger}</Text>
+                                        </Table.Td>
+                                        {item.months.map((amt, i) => (
+                                            <Table.Td key={i} style={{ textAlign: 'right' }}>
+                                                <Text size="xs" fw={500} c={amt !== 0 ? 'inherit' : 'dimmed'}>
+                                                    {amt !== 0 ? formatCurrency(amt) : '–'}
+                                                </Text>
+                                            </Table.Td>
+                                        ))}
+                                        <Table.Td style={{ textAlign: 'right' }}>
+                                            <Text fw={700} size="xs" c="indigo.9">{formatCurrency(item.total)}</Text>
+                                        </Table.Td>
+                                    </Table.Tr>
+                                ))}
+                            </Table.Tbody>
+                        </Table>
+                    </Paper>
                 </Box>
             )}
 
-            <Divider label="Transactions" labelPosition="center" />
-
-            <ScrollArea h={280}>
-                <Table striped highlightOnHover withTableBorder withColumnBorders fz="xs">
-                    <Table.Thead>
-                        <Table.Tr>
-                            <Table.Th>Date</Table.Th>
-                            <Table.Th style={{ textAlign: 'right' }}>Amount</Table.Th>
-                            <Table.Th style={{ textAlign: 'right' }}>Balance</Table.Th>
-                            <Table.Th>Description</Table.Th>
-                        </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                        {data.running_balance.map((row, i) => (
-                            <Table.Tr key={i}>
-                                <Table.Td style={{ whiteSpace: 'nowrap' }}>
-                                    {dayjs(row.date).format('DD MMM YYYY')}
-                                </Table.Td>
-                                <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(row.amount)}</Table.Td>
-                                <Table.Td style={{ textAlign: 'right' }}>{formatCurrency(row.running_balance)}</Table.Td>
-                                <Table.Td>
-                                    <Text size="xs" truncate maw={260}>{row.description}</Text>
-                                </Table.Td>
-                            </Table.Tr>
-                        ))}
-                    </Table.Tbody>
-                </Table>
-            </ScrollArea>
+            <Box style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <Group gap="xs" mb="sm">
+                    <IconListNumbers size={16} color="var(--mantine-color-slate-5)" />
+                    <Text fw={700} size="sm" style={{ textTransform: 'uppercase' }}>Verified Transaction Journal</Text>
+                </Group>
+                
+                <Paper withBorder radius="md" shadow="sm" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <ScrollArea style={{ flex: 1 }}>
+                        <Table highlightOnHover verticalSpacing="sm">
+                            <Table.Thead bg="slate.0" style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'var(--mantine-color-slate-0)' }}>
+                                <Table.Tr>
+                                    <Table.Th style={{ fontSize: rem(10) }}>DATE</Table.Th>
+                                    <Table.Th style={{ textAlign: 'right', fontSize: rem(10) }}>AMOUNT</Table.Th>
+                                    <Table.Th style={{ textAlign: 'right', fontSize: rem(10) }}>BALANCE</Table.Th>
+                                    <Table.Th style={{ fontSize: rem(10) }}>DESCRIPTION</Table.Th>
+                                </Table.Tr>
+                            </Table.Thead>
+                            <Table.Tbody>
+                                {data.running_balance.map((row, i) => (
+                                    <Table.Tr key={i}>
+                                        <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                                            <Text fw={600} c="indigo.7" size="xs">{dayjs(row.date).format('DD MMM YYYY')}</Text>
+                                        </Table.Td>
+                                        <Table.Td style={{ textAlign: 'right' }}>
+                                            <Text fw={700} c={row.amount >= 0 ? 'green.8' : 'red.8'} size="xs">{formatCurrency(row.amount)}</Text>
+                                        </Table.Td>
+                                        <Table.Td style={{ textAlign: 'right' }}>
+                                            <Text fw={500} c="dimmed" size="xs">{formatCurrency(row.running_balance)}</Text>
+                                        </Table.Td>
+                                        <Table.Td>
+                                            <Text size="xs" fw={500} lineClamp={1} maw={350}>{row.description || '-'}</Text>
+                                        </Table.Td>
+                                    </Table.Tr>
+                                ))}
+                            </Table.Tbody>
+                        </Table>
+                    </ScrollArea>
+                </Paper>
+            </Box>
         </Stack>
     );
 }

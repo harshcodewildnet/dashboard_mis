@@ -1,6 +1,6 @@
-import { ActionIcon, Anchor, Badge, Box, Group, Paper, ScrollArea, SegmentedControl, Stack, Table, Text, Title } from "@mantine/core";
+import { ActionIcon, Anchor, Badge, Box, Group, Paper, ScrollArea, SegmentedControl, Stack, Table, Text, Title, rem, Card, Divider } from "@mantine/core";
 import { BarChart } from "@mantine/charts";
-import { IconArrowDown, IconArrowUp, IconArrowsSort, IconChevronDown, IconChevronRight } from "@tabler/icons-react";
+import { IconArrowDown, IconArrowUp, IconArrowsSort, IconChevronDown, IconChevronRight, IconCoin, IconUsers, IconListDetails, IconChartBar } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useIncome, useProfitByCostCenter, useProfitByClient } from "../api/hooks";
@@ -179,33 +179,37 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
   }));
 
   return (
-    <Stack gap="md">
+    <Stack gap="xl">
       {/* Header Card */}
-      <Paper
+      <Card
         p="xl"
-        radius="md"
+        radius="lg"
         style={{
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          color: "white"
+          background: "linear-gradient(135deg, var(--mantine-color-indigo-7) 0%, var(--mantine-color-indigo-9) 100%)",
+          color: "white",
+          minHeight: rem(180),
+          display: 'flex',
+          justifyContent: 'center'
         }}
       >
         <Stack align="center" gap="xs">
-          <Text size="xl" fw={500} opacity={0.9}>
-            Total Revenue - {current_month}
+          <Badge variant="white" color="indigo" size="lg" radius="sm">Revenue Suite</Badge>
+          <Text size="sm" fw={600} opacity={0.8} style={{ textTransform: 'uppercase', letterSpacing: rem(1) }}>
+            Gross Income — {current_month}
           </Text>
-          <Title order={1} size="3.5rem">
+          <Title order={1} size="3.5rem" fw={800}>
             {formatCurrency(total_income)}
           </Title>
         </Stack>
-      </Paper>
+      </Card>
 
       {/* Monthly Profit by Cost Center Matrix */}
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
           {/* Draggable / resizable popup */}
           {popupOpen && selectedCostCenter && (
             <FloatingPopup
-              title={`Cost Center: ${selectedCostCenter}`}
+              title={`Analysis: ${selectedCostCenter}`}
               onClose={() => setPopupOpen(false)}
             >
               <LedgerPopupContent
@@ -214,10 +218,15 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
             </FloatingPopup>
           )}
 
-          <div>
-            <Title order={3}>📊 Monthly Revenue by Cost Center</Title>
-            <Text size="sm" c="dimmed">Revenue breakdown for current year</Text>
-          </div>
+          <Group justify="space-between">
+            <Stack gap={4}>
+              <Group gap="xs">
+                <ActionIcon variant="light" color="indigo" radius="md"><IconListDetails size={18} /></ActionIcon>
+                <Title order={3} size="h4" fw={700}>Revenue by Cost Center</Title>
+              </Group>
+              <Text size="xs" c="dimmed">Annual breakdown by organizational unit</Text>
+            </Stack>
+          </Group>
 
           {profitMatrixQuery.isLoading ? (
             <LoadingState message="Loading profit matrix..." />
@@ -284,24 +293,27 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
       </Paper>
 
       {/* Monthly Profit by Client Matrix */}
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
           <Group justify="space-between" align="center">
-            <div>
-              <Title order={3}>📊 Monthly Revenue by Client</Title>
-              <Text size="sm" c="dimmed">
-                Top 20 clients by revenue.
-              </Text>
-            </div>
+            <Stack gap={4}>
+              <Group gap="xs">
+                <ActionIcon variant="light" color="teal" radius="md"><IconUsers size={18} /></ActionIcon>
+                <Title order={3} size="h4" fw={700}>Revenue by Client</Title>
+              </Group>
+              <Text size="xs" c="dimmed">Top 20 high-value client acquisitions</Text>
+            </Stack>
             <SegmentedControl
+              radius="md"
+              size="xs"
               value={clientSortBy === "total" ? clientSort : undefined}
               onChange={(value) => {
                 setClientSortBy("total");
                 setClientSort(value as "asc" | "desc");
               }}
               data={[
-                { label: 'Highest Revenue', value: 'desc' },
-                { label: 'Lowest Revenue', value: 'asc' },
+                { label: 'Sort: Desk', value: 'desc' },
+                { label: 'Sort: Asc', value: 'asc' },
               ]}
             />
           </Group>
@@ -398,15 +410,18 @@ export function IncomePage({ departmentKey }: IncomePageProps) {
       </Paper>
 
       {/* Income Breakdown by Ledger Table */}
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
-          <div>
-            <Title order={3}>📊 Revenue Breakdown by Ledger</Title>
-            <Text size="sm" c="dimmed">Comparison with previous month</Text>
-          </div>
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
+          <Stack gap={4}>
+            <Group gap="xs">
+              <ActionIcon variant="light" color="blue" radius="md"><IconChartBar size={18} /></ActionIcon>
+              <Title order={3} size="h4" fw={700}>Ledger Breakdown</Title>
+            </Group>
+            <Text size="xs" c="dimmed">Year-over-year comparative statistics</Text>
+          </Stack>
 
           <ScrollArea>
-            <Table striped highlightOnHover>
+            <Table verticalSpacing="md" highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Header</Table.Th>

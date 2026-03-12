@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Button, Group, Modal, Select } from "@mantine/core";
+import { Button, Group, Modal, Select, Text, Stack, rem, Paper } from "@mantine/core";
+import { IconCalendarStats, IconAdjustmentsHorizontal } from "@tabler/icons-react";
 
 export interface MonthRangeFilterProps {
     value: { months?: number; from_date?: string; to_date?: string };
@@ -12,7 +13,6 @@ export function MonthRangeFilter({ value, onChange, defaultMonths = 3 }: MonthRa
     const [customFrom, setCustomFrom] = useState("");
     const [customTo, setCustomTo] = useState("");
 
-    // Generate month options for dropdowns (last 24 months)
     const generateMonthOptions = () => {
         const options: { value: string; label: string }[] = [];
         const now = new Date();
@@ -42,69 +42,80 @@ export function MonthRangeFilter({ value, onChange, defaultMonths = 3 }: MonthRa
 
     return (
         <>
-            <Group gap="xs">
-                <Button
-                    size="xs"
-                    variant={activeMonths === 3 ? "filled" : "default"}
-                    onClick={() => handleMonthsClick(3)}
-                >
-                    3M
-                </Button>
-                <Button
-                    size="xs"
-                    variant={activeMonths === 6 ? "filled" : "default"}
-                    onClick={() => handleMonthsClick(6)}
-                >
-                    6M
-                </Button>
-                <Button
-                    size="xs"
-                    variant={activeMonths === 12 ? "filled" : "default"}
-                    onClick={() => handleMonthsClick(12)}
-                >
-                    12M
-                </Button>
-                <Button
-                    size="xs"
-                    variant={!activeMonths && (value.from_date || value.to_date) ? "filled" : "default"}
-                    onClick={() => setModalOpened(true)}
-                >
-                    ⋯
-                </Button>
-            </Group>
+            <Paper radius="md" p={4} withBorder bg="slate.0">
+                <Group gap={4}>
+                    {[3, 6, 12].map((m) => (
+                        <Button
+                            key={m}
+                            size="compact-xs"
+                            variant={activeMonths === m ? "filled" : "subtle"}
+                            color={activeMonths === m ? "indigo.6" : "slate.6"}
+                            onClick={() => handleMonthsClick(m)}
+                            radius="sm"
+                            px="md"
+                            fw={700}
+                        >
+                            {m}M
+                        </Button>
+                    ))}
+                    <Button
+                        size="compact-xs"
+                        variant={!activeMonths && (value.from_date || value.to_date) ? "filled" : "subtle"}
+                        color={!activeMonths && (value.from_date || value.to_date) ? "indigo.6" : "slate.6"}
+                        onClick={() => setModalOpened(true)}
+                        radius="sm"
+                        px="xs"
+                    >
+                        <IconAdjustmentsHorizontal size={14} />
+                    </Button>
+                </Group>
+            </Paper>
 
             <Modal
                 opened={modalOpened}
                 onClose={() => setModalOpened(false)}
-                title="Select Custom Date Range"
+                title={
+                    <Group gap="xs">
+                        <IconCalendarStats size={20} color="var(--mantine-color-indigo-6)" />
+                        <Text fw={800} style={{ textTransform: 'uppercase', letterSpacing: rem(0.5) }}>Temporal Range Analysis</Text>
+                    </Group>
+                }
                 size="sm"
+                radius="lg"
+                padding="xl"
+                overlayProps={{
+                    backgroundOpacity: 0.55,
+                    blur: 3,
+                }}
             >
-                <Select
-                    label="From Month"
-                    placeholder="Select start month"
-                    data={monthOptions}
-                    value={customFrom}
-                    onChange={(val) => setCustomFrom(val || "")}
-                    searchable
-                    mb="md"
-                />
-                <Select
-                    label="To Month"
-                    placeholder="Select end month"
-                    data={monthOptions}
-                    value={customTo}
-                    onChange={(val) => setCustomTo(val || "")}
-                    searchable
-                    mb="md"
-                />
-                <Group justify="flex-end" gap="sm">
-                    <Button variant="default" onClick={() => setModalOpened(false)}>
-                        Cancel
-                    </Button>
-                    <Button onClick={handleCustomApply} disabled={!customFrom || !customTo}>
-                        Apply
-                    </Button>
-                </Group>
+                <Stack gap="lg">
+                    <Select
+                        label="Historical Start Point"
+                        placeholder="Choose month"
+                        data={monthOptions}
+                        value={customFrom}
+                        onChange={(val) => setCustomFrom(val || "")}
+                        searchable
+                        radius="md"
+                    />
+                    <Select
+                        label="Analysis End Point"
+                        placeholder="Choose month"
+                        data={monthOptions}
+                        value={customTo}
+                        onChange={(val) => setCustomTo(val || "")}
+                        searchable
+                        radius="md"
+                    />
+                    <Group justify="flex-end" gap="sm" pt="md">
+                        <Button variant="light" color="slate" onClick={() => setModalOpened(false)} radius="md">
+                            Dismiss
+                        </Button>
+                        <Button onClick={handleCustomApply} disabled={!customFrom || !customTo} radius="md" color="indigo.6">
+                            Apply Filter
+                        </Button>
+                    </Group>
+                </Stack>
             </Modal>
         </>
     );

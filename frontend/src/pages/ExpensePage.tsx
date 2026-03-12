@@ -1,5 +1,6 @@
-import { Box, Group, Paper, Stack, Text, Title } from "@mantine/core";
+import { ActionIcon, Box, Card, Group, Paper, Stack, Text, Title, rem, Badge, Divider, Grid } from "@mantine/core";
 import { BarChart } from "@mantine/charts";
+import { IconReceipt, IconTrendingUp, IconTrendingDown, IconChartBar, IconInfoCircle, IconAlertTriangle, IconChecklist } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useExpense, useExpenseHierarchy } from "../api/hooks";
 import { ErrorState } from "../components/ErrorState";
@@ -42,45 +43,58 @@ export function ExpensePage({ departmentKey }: ExpensePageProps) {
   }));
 
   return (
-    <Stack gap="md">
+    <Stack gap="xl">
       {/* Header Card */}
-      <Paper
+      <Card
         p="xl"
-        radius="md"
+        radius="lg"
         style={{
-          background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-          color: "white"
+          background: "linear-gradient(135deg, var(--mantine-color-orange-6) 0%, var(--mantine-color-red-7) 100%)",
+          color: "white",
+          minHeight: rem(180),
+          display: 'flex',
+          justifyContent: 'center'
         }}
       >
         <Stack align="center" gap="xs">
-          <Text size="xl" fw={500} opacity={0.9}>
-            Total Expense - {current_month}
+          <Badge variant="white" color="red" size="lg" radius="sm">Expense Auditor</Badge>
+          <Text size="sm" fw={600} opacity={0.8} style={{ textTransform: 'uppercase', letterSpacing: rem(1) }}>
+            Operational Burn — {current_month}
           </Text>
-          <Title order={1} size="3.5rem">
+          <Title order={1} size="3.5rem" fw={800}>
             {formatCurrency(total_expense)}
           </Title>
         </Stack>
-      </Paper>
+      </Card>
 
       {/* Hierarchical Expense Table */}
-      <Paper p="md" radius="md" withBorder>
-        <HierarchicalExpenseTable
-          data={hierarchyQuery.data}
-          isLoading={hierarchyQuery.isLoading}
-        />
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
+          <Group gap="xs">
+            <ActionIcon color="red" variant="light" radius="md"><IconChecklist size={18} /></ActionIcon>
+            <Title order={3} size="h4" fw={700}>Expense Hierarchy</Title>
+          </Group>
+          <HierarchicalExpenseTable
+            data={hierarchyQuery.data}
+            isLoading={hierarchyQuery.isLoading}
+          />
+        </Stack>
       </Paper>
 
 
       {/* Chart */}
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
-          <Title order={4}>Top 10 Expense Categories</Title>
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
+          <Group gap="xs">
+            <ActionIcon color="orange" variant="light" radius="md"><IconChartBar size={18} /></ActionIcon>
+            <Title order={4} size="h5" fw={700}>Top Contribution Categories</Title>
+          </Group>
           <Box h={400} className="chart-container">
             <BarChart
               h={380}
               data={chartData}
               dataKey="ledger"
-              series={[{ name: "amount", label: "Amount", color: "red" }]}
+              series={[{ name: "amount", label: "Amount", color: "orange.6" }]}
               tickLine="y"
               orientation="horizontal"
               yAxisProps={{
@@ -94,19 +108,19 @@ export function ExpensePage({ departmentKey }: ExpensePageProps) {
               }}
               valueFormatter={(value) => formatCurrency(value as number)}
               withTooltip={true}
-              barProps={{ activeBar: false }}
+              barProps={{ activeBar: false, radius: [4, 4, 0, 0] }}
               tooltipProps={{
                 content: ({ label, payload }) => {
                   if (!payload || payload.length === 0) return null;
                   return (
-                    <div style={{ backgroundColor: "white", padding: "12px", borderRadius: "4px", border: "1px solid #dee2e6", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
-                      <Text fw={500} mb={5}>{label}</Text>
+                    <Paper shadow="md" p="sm" withBorder radius="md">
+                      <Text fw={700} size="sm" mb={4}>{label}</Text>
                       {payload.map((item: any) => (
-                        <Text key={item.name} size="sm" c="red.7">
-                          Amount: {formatCurrency(item.value)}
+                        <Text key={item.name} size="xs" c="orange.7" fw={600}>
+                          {formatCurrency(item.value)}
                         </Text>
                       ))}
-                    </div>
+                    </Paper>
                   );
                 }
               }}
@@ -116,64 +130,84 @@ export function ExpensePage({ departmentKey }: ExpensePageProps) {
       </Paper>
 
       {/* Summary Stats */}
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
-          <Title order={4}>📊 Summary Statistics</Title>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
-            <div>
-              <Text size="sm" c="dimmed">Total Expense Categories</Text>
-              <Text size="xl" fw={700}>{items.length}</Text>
-            </div>
-            <div>
-              <Text size="sm" c="dimmed">Average per Category</Text>
-              <Text size="xl" fw={700}>
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
+          <Group gap="xs">
+            <ActionIcon color="slate" variant="light" radius="md"><IconInfoCircle size={18} /></ActionIcon>
+            <Title order={4} size="h5" fw={700}>Expense Intelligence</Title>
+          </Group>
+          <Grid gutter="xl">
+            <Grid.Col span={{ base: 6, md: 3 }}>
+              <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Categories</Text>
+              <Text size="xl" fw={800}>{items.length}</Text>
+            </Grid.Col>
+            <Grid.Col span={{ base: 6, md: 3 }}>
+              <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Avg per Category</Text>
+              <Text size="xl" fw={800}>
                 {formatCurrency(items.reduce((sum, item) => sum + item.current_amount, 0) / items.length || 0)}
               </Text>
-            </div>
-            <div>
-              <Text size="sm" c="dimmed">Highest Expense</Text>
-              <Text size="xl" fw={700}>
+            </Grid.Col>
+            <Grid.Col span={{ base: 6, md: 3 }}>
+              <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Peak Expense</Text>
+              <Text size="xl" fw={800}>
                 {formatCurrency(Math.max(...items.map(item => item.current_amount)))}
               </Text>
-            </div>
-            <div>
-              <Text size="sm" c="dimmed">Avg Variance</Text>
-              <Text size="xl" fw={700}>
+            </Grid.Col>
+            <Grid.Col span={{ base: 6, md: 3 }}>
+              <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Variance avg</Text>
+              <Text size="xl" fw={800} c={items.reduce((sum, item) => sum + item.variance_pct, 0) / items.length > 0 ? 'red.6' : 'green.6'}>
                 {formatVariance(items.reduce((sum, item) => sum + item.variance_pct, 0) / items.length || 0)}
               </Text>
-            </div>
-          </div>
+            </Grid.Col>
+          </Grid>
         </Stack>
       </Paper>
 
       {/* Key Insights */}
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
-          <Title order={4}>💡 Key Insights</Title>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-            <div>
-              <Text fw={600} mb="xs">⚠️ Significantly Increased</Text>
-              {items.filter(item => item.variance_pct > 10).slice(0, 5).map((item, index) => (
-                <Text key={index} size="sm" c="red">
-                  {item.ledger}: {formatVariance(item.variance_pct)}
-                </Text>
-              ))}
-              {items.filter(item => item.variance_pct > 10).length === 0 && (
-                <Text size="sm" c="dimmed">No significant increases</Text>
-              )}
-            </div>
-            <div>
-              <Text fw={600} mb="xs" c="green">✅ Significantly Decreased</Text>
-              {items.filter(item => item.variance_pct < -10).slice(0, 5).map((item, index) => (
-                <Text key={index} size="sm" c="green">
-                  {item.ledger}: {formatVariance(item.variance_pct)}
-                </Text>
-              ))}
-              {items.filter(item => item.variance_pct < -10).length === 0 && (
-                <Text size="sm" c="dimmed">No significant decreases</Text>
-              )}
-            </div>
-          </div>
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
+          <Group gap="xs">
+            <ActionIcon color="orange" variant="light" radius="md"><IconAlertTriangle size={18} /></ActionIcon>
+            <Title order={4} size="h5" fw={700}>Anomalies & Savings</Title>
+          </Group>
+          <Grid gutter="xl">
+            <Grid.Col span={{ base: 12, md: 6 }}>
+              <Stack gap="xs">
+                <Group gap="xs">
+                  <IconTrendingUp size={16} color="var(--mantine-color-red-6)" />
+                  <Text fw={700} size="sm">Budget Overruns</Text>
+                </Group>
+                <Divider />
+                {items.filter(item => item.variance_pct > 10).slice(0, 5).map((item, index) => (
+                  <Group key={index} justify="space-between">
+                    <Text size="xs" fw={500}>{item.ledger}</Text>
+                    <Badge color="red" variant="light" size="xs">{formatVariance(item.variance_pct)}</Badge>
+                  </Group>
+                ))}
+                {items.filter(item => item.variance_pct > 10).length === 0 && (
+                  <Text size="xs" c="dimmed">No significant increases detected</Text>
+                )}
+              </Stack>
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, md: 6 }}>
+              <Stack gap="xs">
+                <Group gap="xs">
+                  <IconTrendingDown size={16} color="var(--mantine-color-green-6)" />
+                  <Text fw={700} size="sm">Savings Achieved</Text>
+                </Group>
+                <Divider />
+                {items.filter(item => item.variance_pct < -10).slice(0, 5).map((item, index) => (
+                  <Group key={index} justify="space-between">
+                    <Text size="xs" fw={500}>{item.ledger}</Text>
+                    <Badge color="green" variant="light" size="xs">{formatVariance(item.variance_pct)}</Badge>
+                  </Group>
+                ))}
+                {items.filter(item => item.variance_pct < -10).length === 0 && (
+                  <Text size="xs" c="dimmed">No significant savings detected</Text>
+                )}
+              </Stack>
+            </Grid.Col>
+          </Grid>
         </Stack>
       </Paper>
     </Stack>

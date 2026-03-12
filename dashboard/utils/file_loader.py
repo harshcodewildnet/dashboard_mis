@@ -81,14 +81,14 @@ def _ensure_directory_exists(directory: Path) -> None:
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize column names to snake_case and trim whitespace."""
     df = df.copy()
-    df.columns = [re.sub(r"[\s\-]+", "_", col.lower().strip()) for col in df.columns]
+    df.columns = [re.sub(r"[\s\-]+", "_", str(col).lower().strip()) for col in df.columns]
     return df
 
 
 def _find_column(df: pd.DataFrame, key: str) -> Optional[str]:
     """Find a column by alias list, returning the actual column name."""
     aliases = COLUMN_MAPPING.get(key, [])
-    normalized = {col.lower(): col for col in df.columns}
+    normalized = {str(col).lower(): col for col in df.columns}
     for alias in aliases:
         if alias in normalized:
             return normalized[alias]

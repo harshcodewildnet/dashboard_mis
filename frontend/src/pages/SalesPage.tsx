@@ -1,4 +1,5 @@
-import { Grid, Group, NumberInput, Stack, Text } from "@mantine/core";
+import { ActionIcon, Badge, Card, Grid, Group, NumberInput, Paper, Stack, Text, Title, rem } from "@mantine/core";
+import { IconShoppingBag, IconUsers, IconTicket, IconTrendingUp, IconChartBar, IconInfoCircle } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { useSales } from "../api/hooks";
@@ -79,36 +80,82 @@ export function SalesPage({ departmentKey }: SalesPageProps) {
   };
 
   return (
-    <Stack gap="md">
-      <Group justify="space-between" align="center">
-        <div>
-          <Text fw={700} fz="xl">
-            Sales Analysis (in Lakhs)
+    <Stack gap="xl">
+      <Group justify="space-between" align="flex-end">
+        <Stack gap={4}>
+          <Text size="sm" fw={600} c="indigo.6" style={{ textTransform: 'uppercase', letterSpacing: rem(1) }}>
+            Sales Intelligence
           </Text>
-          <Text c="dimmed" size="sm">
-            File {data.meta.file_name} · Sheet {data.meta.sheet}
-          </Text>
-        </div>
-        <Group gap="md">
-          <NumberInput label="Top N" value={topN} min={3} max={30} onChange={(val) => setTopN(val || 10)} w={120} />
+          <Title order={1} size="h2" fw={800}>
+            Sales Analysis <Text span c="dimmed" fw={500} size="lg"> (in Lakhs)</Text>
+          </Title>
+        </Stack>
+        <Group gap="md" align="flex-end">
+          <NumberInput 
+            label="Top N Items" 
+            value={topN} 
+            min={3} 
+            max={30} 
+            onChange={(val) => setTopN(typeof val === 'number' ? val : (parseInt(val as string) || 10))} 
+            w={120} 
+            radius="md"
+          />
           <DateRangePicker value={range} onChange={setRange} />
         </Group>
       </Group>
 
-      <StatGrid
-        items={[
-          { label: "Total Sales", value: formatCurrency(data.totals.total_sales) },
-          { label: "Unique Customers", value: data.totals.unique_customers.toLocaleString() },
-          { label: "Average Ticket", value: formatCurrency(data.totals.avg_ticket) }
-        ]}
-      />
+      <Grid gutter="lg">
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <Card radius="lg" p="lg" withBorder shadow="sm">
+            <Group gap="sm" mb="xs">
+              <ActionIcon variant="light" color="indigo" radius="md"><IconShoppingBag size={18} /></ActionIcon>
+              <Text size="sm" c="dimmed" fw={600}>TOTAL REVENUE</Text>
+            </Group>
+            <Title order={2} fw={800}>{formatCurrency(data.totals.total_sales)}</Title>
+          </Card>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <Card radius="lg" p="lg" withBorder shadow="sm">
+            <Group gap="sm" mb="xs">
+              <ActionIcon variant="light" color="teal" radius="md"><IconUsers size={18} /></ActionIcon>
+              <Text size="sm" c="dimmed" fw={600}>UNIQUE CLIENTS</Text>
+            </Group>
+            <Title order={2} fw={800}>{data.totals.unique_customers.toLocaleString()}</Title>
+          </Card>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <Card radius="lg" p="lg" withBorder shadow="sm">
+            <Group gap="sm" mb="xs">
+              <ActionIcon variant="light" color="orange" radius="md"><IconTicket size={18} /></ActionIcon>
+              <Text size="sm" c="dimmed" fw={600}>AVG TICKET SIZE</Text>
+            </Group>
+            <Title order={2} fw={800}>{formatCurrency(data.totals.avg_ticket)}</Title>
+          </Card>
+        </Grid.Col>
+      </Grid>
 
-      <Grid gutter="md">
+      <Grid gutter="lg">
         <Grid.Col span={{ base: 12, lg: 7 }}>
-          <ChartCard title="Sales by Month" option={monthlyOption} height={360} />
+          <Paper p="xl" radius="lg" withBorder shadow="sm">
+            <Stack gap="lg">
+              <Group gap="xs">
+                <ActionIcon color="indigo" variant="light" radius="md"><IconTrendingUp size={18} /></ActionIcon>
+                <Title order={3} size="h5" fw={700}>Sales Volume Trends</Title>
+              </Group>
+              <ChartCard naked title="Sales by Month" option={monthlyOption} height={320} />
+            </Stack>
+          </Paper>
         </Grid.Col>
         <Grid.Col span={{ base: 12, lg: 5 }}>
-          <ChartCard title="Top Customers" option={customersOption} height={360} />
+          <Paper p="xl" radius="lg" withBorder shadow="sm">
+            <Stack gap="lg">
+              <Group gap="xs">
+                <ActionIcon color="teal" variant="light" radius="md"><IconUsers size={18} /></ActionIcon>
+                <Title order={3} size="h5" fw={700}>Top Performance Clients</Title>
+              </Group>
+              <ChartCard naked title="Top Customers" option={customersOption} height={320} />
+            </Stack>
+          </Paper>
         </Grid.Col>
       </Grid>
 

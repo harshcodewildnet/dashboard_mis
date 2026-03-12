@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Badge, Box, Button, Grid, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
+import { Badge, Box, Button, Grid, Group, Paper, Stack, Table, Text, Title, ActionIcon, rem, Card, Divider } from "@mantine/core";
 import { LineChart } from "@mantine/charts";
+import { IconArrowUpRight, IconArrowDownRight, IconChartLine, IconCreditCard, IconReceipt, IconTrendingUp, IconCalendar } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { useHome, useMonthlyTrends } from "../api/hooks";
 import { ErrorState } from "../components/ErrorState";
@@ -46,93 +47,134 @@ export function HomePage({ departmentKey }: HomePageProps) {
   })) || [];
 
   return (
-    <Stack gap="md">
+    <Stack gap="xl">
       {/* Header */}
-      <Title order={2}>💰 Financial Dashboard - {data.current_month}</Title>
+      <Group justify="space-between" align="flex-end">
+        <Stack gap={4}>
+          <Text size="sm" fw={600} c="indigo.6" style={{ textTransform: 'uppercase', letterSpacing: rem(1) }}>
+            Executive Overview
+          </Text>
+          <Title order={1} size="h2" fw={800}>
+            Financial Dashboard <Text span c="dimmed" fw={500} size="lg">— {data.current_month}</Text>
+          </Title>
+        </Stack>
+        <Group gap="xs">
+          <Badge variant="dot" size="lg" color="green">Live Data</Badge>
+          <Text size="xs" c="dimmed" fw={500}>Last updated: {new Date().toLocaleTimeString()}</Text>
+        </Group>
+      </Group>
 
-      {/* Income and Expense Cards */}
-      <Grid>
-        <Grid.Col span={{ base: 12, sm: 6 }}>
-          <Paper
+      {/* Primary KPI Cards */}
+      <Grid gutter="lg">
+        <Grid.Col span={{ base: 12, sm: 6, lg: 4 }}>
+          <Card
             p="xl"
-            radius="md"
+            radius="lg"
             style={{
-              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              background: "linear-gradient(45deg, var(--mantine-color-indigo-7) 0%, var(--mantine-color-indigo-9) 100%)",
               color: "white",
-              cursor: "pointer",
-              transition: "transform 0.2s",
+              overflow: 'hidden',
+              position: 'relative'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.02)"}
-            onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-            onClick={() => navigate("/income")}
           >
-            <Stack gap="xs">
-              <Text size="lg" opacity={0.9}>Revenue</Text>
-              <Title order={1} size="2.5rem">{formatCurrency(data.income)}</Title>
+            <Box style={{ position: 'absolute', top: rem(-20), right: rem(-20), opacity: 0.15 }}>
+              <IconTrendingUp size={rem(140)} />
+            </Box>
+            <Stack gap="md" style={{ position: 'relative', zIndex: 1 }}>
+              <Group justify="space-between">
+                <Text size="sm" fw={600} style={{ opacity: 0.8, textTransform: 'uppercase' }}>Total Revenue</Text>
+                <ActionIcon variant="transparent" color="white" onClick={() => navigate("/income")}>
+                  <IconArrowUpRight size={20} />
+                </ActionIcon>
+              </Group>
+              <Title order={1} size="2.5rem" fw={800}>{formatCurrency(data.income)}</Title>
+              <Button 
+                variant="white" 
+                color="indigo" 
+                fullWidth 
+                radius="md" 
+                size="sm"
+                onClick={() => navigate("/income")}
+                leftSection={<IconChartLine size={16} />}
+              >
+                Revenue Details
+              </Button>
             </Stack>
-          </Paper>
-          <Button
-            fullWidth
-            mt="xs"
-            variant="light"
-            color="violet"
-            onClick={() => navigate("/income")}
-          >
-            📈 View Revenue Details
-          </Button>
+          </Card>
         </Grid.Col>
 
-        <Grid.Col span={{ base: 12, sm: 6 }}>
-          <Paper
+        <Grid.Col span={{ base: 12, sm: 6, lg: 4 }}>
+          <Card
             p="xl"
-            radius="md"
+            radius="lg"
             style={{
-              background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+              background: "linear-gradient(45deg, var(--mantine-color-pink-6) 0%, var(--mantine-color-red-8) 100%)",
               color: "white",
-              cursor: "pointer",
-              transition: "transform 0.2s",
+              overflow: 'hidden',
+              position: 'relative'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.02)"}
-            onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-            onClick={() => navigate("/expense")}
           >
-            <Stack gap="xs">
-              <Text size="lg" opacity={0.9}>Expense</Text>
-              <Title order={1} size="2.5rem">{formatCurrency(data.expense)}</Title>
+            <Box style={{ position: 'absolute', top: rem(-20), right: rem(-20), opacity: 0.15 }}>
+              <IconReceipt size={rem(140)} />
+            </Box>
+            <Stack gap="md" style={{ position: 'relative', zIndex: 1 }}>
+              <Group justify="space-between">
+                <Text size="sm" fw={600} style={{ opacity: 0.8, textTransform: 'uppercase' }}>Total Expenses</Text>
+                <ActionIcon variant="transparent" color="white" onClick={() => navigate("/expense")}>
+                  <IconArrowDownRight size={20} />
+                </ActionIcon>
+              </Group>
+              <Title order={1} size="2.5rem" fw={800}>{formatCurrency(data.expense)}</Title>
+              <Button 
+                variant="white" 
+                color="pink" 
+                fullWidth 
+                radius="md" 
+                size="sm"
+                onClick={() => navigate("/expense")}
+                leftSection={<IconReceipt size={16} />}
+              >
+                Expense Analysis
+              </Button>
+            </Stack>
+          </Card>
+        </Grid.Col>
+
+        <Grid.Col span={{ base: 12, lg: 4 }}>
+          <Paper p="xl" radius="lg" withBorder shadow="md">
+            <Stack gap="md">
+              <Group justify="space-between">
+                <Text size="sm" fw={600} c="dimmed" style={{ textTransform: 'uppercase' }}>Net Profit Margins</Text>
+                <Badge color={data.profit >= 0 ? "green" : "red"} variant="light" size="lg" radius="sm">
+                  {((data.profit / data.income) * 100).toFixed(1)}% margin
+                </Badge>
+              </Group>
+              <Title order={1} size="2.5rem" fw={800} c={data.profit >= 0 ? "green.7" : "red.7"}>
+                {formatCurrency(data.profit)}
+              </Title>
+              <Divider label="Cash Liquidity" labelPosition="center" />
+              <Group justify="space-between">
+                <Text size="sm" fw={600} c="dimmed">Cash Balance</Text>
+                <Text fw={700} size="lg">{formatCurrency(data.cash_balance)}</Text>
+              </Group>
             </Stack>
           </Paper>
-          <Button
-            fullWidth
-            mt="xs"
-            variant="light"
-            color="pink"
-            onClick={() => navigate("/expense")}
-          >
-            📉 View Expense Details
-          </Button>
         </Grid.Col>
       </Grid>
 
-      {/* Net Profit */}
-      <Paper
-        p="md"
-        radius="md"
-        style={{
-          background: `rgba(${data.profit >= 0 ? "16, 185, 129" : "239, 68, 68"}, 0.1)`,
-          border: `2px solid ${profitColor}`,
-          textAlign: "center"
-        }}
-      >
-        <Text fw={600} size="lg" style={{ color: profitColor }}>
-          Net Profit: {formatCurrency(data.profit)}
-        </Text>
-      </Paper>
-
       {/* Main Monthly Trends Overview */}
-      <Paper p="md" radius="md" withBorder>
-        <Stack gap="md">
-          <Group justify="space-between">
-            <Title order={3}>📈 Monthly Trends Overview</Title>
+      <Paper p="xl" radius="lg" withBorder shadow="sm">
+        <Stack gap="lg">
+          <Group justify="space-between" wrap="nowrap">
+            <Group gap="sm">
+              <ActionIcon variant="light" color="indigo" size="lg" radius="md">
+                <IconChartLine size={20} />
+              </ActionIcon>
+              <div>
+                <Text fw={700} size="lg">Monthly Performance Trends</Text>
+                <Text size="xs" c="dimmed">Comparative analysis of financial movement</Text>
+              </div>
+            </Group>
             <MonthRangeFilter value={mainRange} onChange={setMainRange} defaultMonths={3} />
           </Group>
 
@@ -197,11 +239,14 @@ export function HomePage({ departmentKey }: HomePageProps) {
       </Paper>
 
       {/* Three Individual Trend Graphs */}
-      <Grid>
+      <Grid gutter="lg">
         <Grid.Col span={{ base: 12, md: 4 }}>
-          <Stack gap="md" h="100%">
+          <Stack gap="md">
             <Group justify="space-between">
-              <Title order={4}>📈 Profit Trend</Title>
+              <Group gap="xs">
+                <IconTrendingUp size={18} color="var(--mantine-color-green-6)" />
+                <Text fw={600} size="sm">Profit Velocity</Text>
+              </Group>
               <MonthRangeFilter value={profitRange} onChange={setProfitRange} defaultMonths={3} />
             </Group>
             {profitTrends.isLoading ? (
@@ -213,17 +258,20 @@ export function HomePage({ departmentKey }: HomePageProps) {
                 data={profitTrends.data?.trends || []}
                 dataKey="profit"
                 title="Profit"
-                color="#10b981"
-                height={300}
+                color="var(--mantine-color-green-5)"
+                height={260}
               />
             )}
           </Stack>
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, md: 4 }}>
-          <Stack gap="md" h="100%">
+          <Stack gap="md">
             <Group justify="space-between">
-              <Title order={4}>📉 Expense Trend</Title>
+              <Group gap="xs">
+                <IconReceipt size={18} color="var(--mantine-color-orange-6)" />
+                <Text fw={600} size="sm">Expense Flow</Text>
+              </Group>
               <MonthRangeFilter value={expenseRange} onChange={setExpenseRange} defaultMonths={3} />
             </Group>
             {expenseTrends.isLoading ? (
@@ -235,17 +283,20 @@ export function HomePage({ departmentKey }: HomePageProps) {
                 data={expenseTrends.data?.trends || []}
                 dataKey="expense"
                 title="Expense"
-                color="#f97316"
-                height={300}
+                color="var(--mantine-color-orange-5)"
+                height={260}
               />
             )}
           </Stack>
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, md: 4 }}>
-          <Stack gap="md" h="100%">
+          <Stack gap="md">
             <Group justify="space-between">
-              <Title order={4}>💰 Revenue Trend</Title>
+              <Group gap="xs">
+                <IconChartLine size={18} color="var(--mantine-color-blue-6)" />
+                <Text fw={600} size="sm">Revenue Growth</Text>
+              </Group>
               <MonthRangeFilter value={incomeRange} onChange={setIncomeRange} defaultMonths={3} />
             </Group>
             {incomeTrends.isLoading ? (
@@ -257,8 +308,8 @@ export function HomePage({ departmentKey }: HomePageProps) {
                 data={incomeTrends.data?.trends || []}
                 dataKey="income"
                 title="Revenue"
-                color="#3b82f6"
-                height={300}
+                color="var(--mantine-color-blue-5)"
+                height={260}
               />
             )}
           </Stack>
@@ -266,57 +317,72 @@ export function HomePage({ departmentKey }: HomePageProps) {
       </Grid>
 
       {/* Quick Stats and Monthly Expenses */}
-      <Grid>
+      <Grid gutter="lg">
         <Grid.Col span={{ base: 12, md: 4 }}>
-          <Paper p="md" radius="md" withBorder h="100%">
-            <Stack gap="md">
-              <Title order={4}>📊 Quick Stats</Title>
-              <div>
-                <Text size="sm" c="dimmed">💰 Cash Balance</Text>
-                <Text size="xl" fw={700}>{formatCurrency(data.cash_balance)}</Text>
-              </div>
-              <div>
-                <Text size="sm" c="dimmed">📈 Total Revenue</Text>
-                <Text size="xl" fw={700}>{formatCurrency(data.total_revenue)}</Text>
-              </div>
-              <div>
-                <Text size="sm" c="dimmed">📉 Total Expenses</Text>
-                <Text size="xl" fw={700}>{formatCurrency(data.total_expenses)}</Text>
-              </div>
-              <div>
-                <Text size="sm" c="dimmed">💵 Net Profit</Text>
-                <Text size="xl" fw={700}>
-                  {formatCurrency(data.net_profit)}
-                </Text>
-                <Badge
-                  color={data.net_profit >= 0 ? "green" : "red"}
-                  variant="light"
-                  mt="xs"
-                >
-                  {((data.net_profit / data.total_revenue) * 100).toFixed(1)}%
-                </Badge>
-              </div>
+          <Paper p="xl" radius="lg" withBorder h="100%" shadow="sm">
+            <Stack gap="lg">
+              <Group gap="xs">
+                <ActionIcon color="indigo" variant="light"><IconCreditCard size={18} /></ActionIcon>
+                <Text fw={700}>Financial Summary</Text>
+              </Group>
+              
+              <Stack gap="xs">
+                <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Available Liquidity</Text>
+                <Text size="xl" fw={800}>{formatCurrency(data.cash_balance)}</Text>
+              </Stack>
+
+              <Stack gap="xs">
+                <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Gross Revenue</Text>
+                <Text size="xl" fw={800}>{formatCurrency(data.total_revenue)}</Text>
+              </Stack>
+
+              <Stack gap="xs">
+                <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Total Burn</Text>
+                <Text size="xl" fw={800}>{formatCurrency(data.total_expenses)}</Text>
+              </Stack>
+
+              <Stack gap="xs">
+                <Text size="xs" c="dimmed" fw={600} style={{ textTransform: 'uppercase' }}>Net Yield</Text>
+                <Group justify="space-between">
+                  <Text size="xl" fw={800} c={data.net_profit >= 0 ? "green.6" : "red.6"}>
+                    {formatCurrency(data.net_profit)}
+                  </Text>
+                  <Badge
+                    color={data.net_profit >= 0 ? "green" : "red"}
+                    variant="filled"
+                    size="lg"
+                  >
+                    {((data.net_profit / data.total_revenue) * 100).toFixed(1)}%
+                  </Badge>
+                </Group>
+              </Stack>
             </Stack>
           </Paper>
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, md: 8 }}>
-          <Paper p="md" radius="md" withBorder h="100%">
-            <Stack gap="md">
-              <Title order={4}>📅 Monthly Expenses</Title>
-              <Table striped highlightOnHover>
+          <Paper p="xl" radius="lg" withBorder h="100%" shadow="sm">
+            <Stack gap="lg">
+              <Group justify="space-between">
+                <Group gap="xs">
+                  <ActionIcon color="orange" variant="light"><IconCalendar size={18} /></ActionIcon>
+                  <Text fw={700}>Expense History</Text>
+                </Group>
+                <Badge variant="light" color="orange">Past 6 Months</Badge>
+              </Group>
+              <Table verticalSpacing="md" highlightOnHover>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Month</Table.Th>
-                    <Table.Th style={{ textAlign: "right" }}>Total Expense</Table.Th>
+                    <Table.Th style={{ color: 'var(--mantine-color-dimmed)', fontSize: rem(12), textTransform: 'uppercase' }}>Month</Table.Th>
+                    <Table.Th style={{ textAlign: "right", color: 'var(--mantine-color-dimmed)', fontSize: rem(12), textTransform: 'uppercase' }}>Total Expenditure</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                   {data.monthly_expenses.map((item, index) => (
                     <Table.Tr key={index}>
-                      <Table.Td>{item.month}</Table.Td>
-                      <Table.Td style={{ textAlign: "right", fontWeight: 600 }}>
-                        {formatCurrency(item.total_expense)}
+                      <Table.Td fw={600}>{item.month}</Table.Td>
+                      <Table.Td style={{ textAlign: "right" }}>
+                        <Text fw={700} c="slate.8">{formatCurrency(item.total_expense)}</Text>
                       </Table.Td>
                     </Table.Tr>
                   ))}
